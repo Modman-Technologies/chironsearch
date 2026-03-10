@@ -126,9 +126,7 @@
   </div>
 
 <script>
-
 async function search() {
-
   const query = document.getElementById("query").value.trim();
 
   if (!query) {
@@ -140,25 +138,33 @@ async function search() {
   document.getElementById("unified-answer").innerText =
     "Chiron Nexus is thinking...";
 
-  const response = await fetch("/api/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ query })
-  });
+  try {
+    const response = await fetch("/api/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ query })
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  document.getElementById("unified-answer").innerText = data.answer;
+    document.getElementById("unified-answer").innerText =
+      data.answer || "No answer returned.";
 
-  const sources = data.sources
-    .map(src => `<div class="source-pill">${src}</div>`)
-    .join("");
+    const sources = (data.sources || [])
+      .map(src => `<div class="source-pill">${src}</div>`)
+      .join("");
 
-  document.getElementById("ai-sources").innerHTML = sources;
+    document.getElementById("ai-sources").innerHTML =
+      sources || '<div class="source-pill">No sources</div>';
+  } catch (error) {
+    document.getElementById("unified-answer").innerText =
+      "There was a problem contacting Chiron Engine.";
+    document.getElementById("ai-sources").innerHTML =
+      '<div class="source-pill">Unavailable</div>';
+  }
 }
-
 </script>
 </body>
 </html>
