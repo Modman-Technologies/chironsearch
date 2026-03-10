@@ -9,7 +9,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
+
+    // OPENAI REQUEST
+    const openaiResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -18,49 +20,58 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         tools: [{ type: "web_search" }],
-        include: ["web_search_call.action.sources"],
-        input: `Provide a clear answer with citations for: ${query}`
+        input: query
       })
     });
 
-    const data = await response.json();
+    const openaiData = await openaiResponse.json();
 
-    if (!response.ok) {
-      console.error("OpenAI API HTTP error:", data);
-      return res.status(response.status).json({
-        answer: data.error?.message || "OpenAI request failed.",
-        sources: []
-      });
-    }
+    const openaiAnswer =
+      openaiData.output_text ||
+      openaiData.output?.[0]?.content?.[0]?.text ||
+      "OpenAI returned no answer.";
 
-    console.error("OpenAI raw response:", JSON.stringify(data, null, 2));
-
-    const messageItem = (data.output || []).find(
-      item => item.type === "message"
+    // GEMINI REQUEST
+    const geminiResponse = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" +
+        process.env.GEMINI_API_KEY,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: query }
+              ]
+            }
+          ]
+        })
+      }
     );
 
-    const answer =
-      data.output_text ||
-      messageItem?.content?.find(part => part.type === "output_text")?.text ||
-      messageItem?.content?.[0]?.text ||
-      "No answer returned.";
+    const geminiData = await geminiResponse.json();
 
-    const webSearchItem = (data.output || []).find(
-      item => item.type === "web_search_call"
-    );
-
-    const sourceTitles =
-      webSearchItem?.action?.sources?.map(source => source.title).filter(Boolean) || [];
+    const geminiAnswer =
+      geminiData.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Gemini returned no answer.";
 
     res.status(200).json({
-      answer,
-      sources: sourceTitles.length ? sourceTitles : ["OpenAI Web Search"]
+      answer:
+        "OPENAI:\n\n" +
+        openaiAnswer +
+        "\n\n-------------------\n\nGEMINI:\n\n" +
+        geminiAnswer,
+      sources: ["OpenAI Web Search", "Gemini"]
     });
+
   } catch (error) {
-    console.error("OpenAI API error:", error);
+    console.error("Chiron Engine error:", error);
 
     res.status(500).json({
-      answer: "Error contacting OpenAI.",
+      answer: "Error contacting AI services.",
       sources: []
     });
   }
