@@ -1,17 +1,6 @@
 export default async function handler(req, res) {
   const { query } = req.body || {};
 
-  console.error(
-  "Gemini key debug:",
-  process.env.GEMINI_API_KEY
-    ? {
-        startsWith: process.env.GEMINI_API_KEY.slice(0, 4),
-        endsWith: process.env.GEMINI_API_KEY.slice(-4),
-        length: process.env.GEMINI_API_KEY.length
-      }
-    : "MISSING"
-);
-
   if (!query) {
     return res.status(400).json({
       answer: "No query provided.",
