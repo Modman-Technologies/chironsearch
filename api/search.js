@@ -11,41 +11,34 @@ export default async function handler(req, res) {
 
   try {
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are Chiron Nexus, a system that provides clear unified answers."
-          },
-          {
-            role: "user",
-            content: query
-          }
-        ]
+        model: "gpt-4.1-mini",
+        tools: [{ type: "web_search" }],
+        input: `Provide a clear answer with citations for: ${query}`
       })
     });
 
     const data = await response.json();
 
     const answer =
-      data.choices?.[0]?.message?.content || "No answer returned.";
+      data.output?.[0]?.content?.[0]?.text ||
+      "No answer returned.";
 
     res.status(200).json({
       answer,
-      sources: ["OpenAI"]
+      sources: ["OpenAI Web Search"]
     });
 
   } catch (error) {
 
     res.status(500).json({
-      answer: "Error contacting AI service.",
+      answer: "Error contacting OpenAI.",
       sources: []
     });
 
