@@ -25,16 +25,37 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
+    if (!response.ok) {
+      console.error("OpenAI API HTTP error:", data);
+      return res.status(response.status).json({
+        answer: data.error?.message || "OpenAI request failed.",
+        sources: []
+      });
+    }
+
+    console.error("OpenAI raw response:", JSON.stringify(data, null, 2));
+
+    const messageItem = (data.output || []).find(
+      item => item.type === "message"
+    );
+
     const answer =
       data.output_text ||
-      data.output?.find(item => item.type === "message")?.content?.[0]?.text ||
+      messageItem?.content?.find(part => part.type === "output_text")?.text ||
+      messageItem?.content?.[0]?.text ||
       "No answer returned.";
+
+    const webSearchItem = (data.output || []).find(
+      item => item.type === "web_search_call"
+    );
+
+    const sourceTitles =
+      webSearchItem?.action?.sources?.map(source => source.title).filter(Boolean) || [];
 
     res.status(200).json({
       answer,
-      sources: ["OpenAI Web Search"]
+      sources: sourceTitles.length ? sourceTitles : ["OpenAI Web Search"]
     });
-
   } catch (error) {
     console.error("OpenAI API error:", error);
 
@@ -43,5 +64,4 @@ export default async function handler(req, res) {
       sources: []
     });
   }
-
 }
