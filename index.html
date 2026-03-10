@@ -125,23 +125,40 @@
     </div>
   </div>
 
-  <script>
-    function search() {
-      const query = document.getElementById("query").value.trim();
+<script>
 
-      if (!query) {
-        document.getElementById("unified-answer").innerText =
-          "Please enter a question first.";
-        return;
-      }
+async function search() {
 
-      document.getElementById("unified-answer").innerText =
-        'Chiron Nexus is preparing a unified answer for: "' + query + '"';
+  const query = document.getElementById("query").value.trim();
 
-      document.getElementById("ai-sources").innerHTML =
-        '<div class="source-pill">OpenAI</div>' +
-        '<div class="source-pill">Gemini</div>';
-    }
-  </script>
+  if (!query) {
+    document.getElementById("unified-answer").innerText =
+      "Please enter a question.";
+    return;
+  }
+
+  document.getElementById("unified-answer").innerText =
+    "Chiron Nexus is thinking...";
+
+  const response = await fetch("/api/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ query })
+  });
+
+  const data = await response.json();
+
+  document.getElementById("unified-answer").innerText = data.answer;
+
+  const sources = data.sources
+    .map(src => `<div class="source-pill">${src}</div>`)
+    .join("");
+
+  document.getElementById("ai-sources").innerHTML = sources;
+}
+
+</script>
 </body>
 </html>
