@@ -105,7 +105,7 @@
     <div class="subtitle">A unified answer layer across multiple AI systems</div>
 
     <div class="search-bar">
-      <input id="query" type="text" placeholder="Ask anything..." />
+<input id="query" type="text" placeholder="Ask anything..." onkeydown="if(event.key==='Enter'){search()}" />
       <button onclick="search()">Search</button>
     </div>
 
@@ -149,6 +149,10 @@ async function search() {
 
     const data = await response.json();
 
+    if (!response.ok) {
+      throw new Error(data.answer || "Request failed");
+    }
+
     document.getElementById("unified-answer").innerText =
       data.answer || "No answer returned.";
 
@@ -160,7 +164,7 @@ async function search() {
       sources || '<div class="source-pill">No sources</div>';
   } catch (error) {
     document.getElementById("unified-answer").innerText =
-      "There was a problem contacting Chiron Engine.";
+      error.message || "There was a problem contacting Chiron Engine.";
     document.getElementById("ai-sources").innerHTML =
       '<div class="source-pill">Unavailable</div>';
   }
