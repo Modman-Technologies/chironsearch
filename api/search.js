@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-
   const { query } = req.body || {};
 
   if (!query) {
@@ -10,7 +9,6 @@ export default async function handler(req, res) {
   }
 
   try {
-
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -19,9 +17,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        tools: [
-          { type: "web_search" }
-        ],
+        tools: [{ type: "web_search" }],
+        include: ["web_search_call.action.sources"],
         input: `Provide a clear answer with citations for: ${query}`
       })
     });
@@ -29,7 +26,8 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     const answer =
-      data.output?.[0]?.content?.[0]?.text ||
+      data.output_text ||
+      data.output?.find(item => item.type === "message")?.content?.[0]?.text ||
       "No answer returned.";
 
     res.status(200).json({
@@ -38,12 +36,9 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-
     res.status(500).json({
       answer: "Error contacting OpenAI.",
       sources: []
     });
-
   }
-
 }
