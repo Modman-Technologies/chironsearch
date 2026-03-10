@@ -2,13 +2,146 @@
 <html>
 <head>
   <title>Chiron Nexus</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 80px 20px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 52px;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      font-size: 18px;
+      color: #cbd5e1;
+      margin-bottom: 40px;
+    }
+
+    .search-bar {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+
+    input {
+      width: 520px;
+      max-width: 100%;
+      padding: 16px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: none;
+      outline: none;
+    }
+
+    button {
+      padding: 16px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .panel {
+      background: #1e293b;
+      border-radius: 14px;
+      padding: 24px;
+      margin-top: 20px;
+      text-align: left;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+
+    .panel h2 {
+      margin-top: 0;
+      margin-bottom: 14px;
+      font-size: 22px;
+    }
+
+    .answer-text {
+      color: #e2e8f0;
+      line-height: 1.6;
+      font-size: 16px;
+    }
+
+    .source-list {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .source-pill {
+      background: #334155;
+      color: #e2e8f0;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 14px;
+    }
+  </style>
 </head>
+<body>
+  <div class="container">
+    <h1>Chiron Nexus</h1>
+    <div class="subtitle">A unified answer layer across multiple AI systems</div>
 
-<body style="font-family:Arial;text-align:center;margin-top:100px;">
+    <div class="search-bar">
+      <input id="query" type="text" placeholder="Ask anything..." />
+      <button onclick="search()">Search</button>
+    </div>
 
-<h1>Chiron Nexus</h1>
+    <div class="panel">
+      <h2>Unified Answer</h2>
+      <div class="answer-text" id="unified-answer">
+        Your combined answer will appear here.
+      </div>
+    </div>
 
-<p>Multi-AI search engine coming soon.</p>
+    <div class="panel">
+      <h2>AI Sources</h2>
+      <div class="source-list" id="ai-sources">
+        <div class="source-pill">OpenAI</div>
+        <div class="source-pill">Gemini</div>
+      </div>
+    </div>
+  </div>
 
+  <script>
+    function search() {
+      const query = document.getElementById("query").value.trim();
+
+      if (!query) {
+        document.getElementById("unified-answer").innerText =
+          "Please enter a question first.";
+        return;
+      }
+
+      document.getElementById("unified-answer").innerText =
+        'Chiron Nexus is preparing a unified answer for: "' + query + '"';
+
+      document.getElementById("ai-sources").innerHTML =
+        '<div class="source-pill">OpenAI</div>' +
+        '<div class="source-pill">Gemini</div>';
+    }
+  </script>
 </body>
 </html>
