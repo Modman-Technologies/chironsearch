@@ -19,7 +19,9 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        tools: [{ type: "web_search" }],
+        tools: [
+          { type: "web_search" }
+        ],
         input: `Provide a clear answer with citations for: ${query}`
       })
     });
