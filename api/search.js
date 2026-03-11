@@ -77,6 +77,91 @@ function getConfidence(openaiAnswer, geminiAnswer, disagreement) {
   return "medium";
 }
 
+function fingerprintQuery(q = "") {
+  const stopWords = new Set([
+    "a",
+    "an",
+    "and",
+    "are",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "tell",
+    "the",
+    "to",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why"
+  ]);
+
+  return q
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((word) => !stopWords.has(word))
+    .sort()
+    .join(" ");
+}
+
+function isSemanticCacheSafe(query = "") {
+  const q = query.toLowerCase();
+
+  const unsafePatterns = [
+    "latest",
+    "today",
+    "current",
+    "currently",
+    "now",
+    "news",
+    "recent",
+    "tonight",
+    "tomorrow",
+    "yesterday",
+    "this week",
+    "this month",
+    "this year",
+    "near me",
+    "my",
+    "for me",
+    "should i",
+    "best",
+    "compare",
+    "vs",
+    "versus"
+  ];
+
+  if (unsafePatterns.some((pattern) => q.includes(pattern))) {
+    return false;
+  }
+
+  if (/\b(20\d{2}|19\d{2})\b/.test(q)) {
+    return false;
+  }
+
+  const tokenCount = tokenize(q).length;
+  if (tokenCount < 2 || tokenCount > 12) {
+    return false;
+  }
+
+  return true;
+}
+
 async function fetchWithAbort(url, options, ms, label = "Request") {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ms);
@@ -352,7 +437,14 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v9:${normalizedQuery}`;
+  const cacheKey = `search:v10:${normalizedQuery}`;
+  const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
+  const semanticFingerprint = semanticEnabled
+    ? fingerprintQuery(normalizedQuery)
+    : "";
+  const semanticKey = semanticFingerprint
+    ? `semantic:v1:${semanticFingerprint}`
+    : "";
 
   try {
     const cached = await kv.get(cacheKey);
@@ -362,6 +454,19 @@ export default async function handler(req, res) {
         ...cached,
         cached: true
       });
+    }
+
+    if (semanticKey) {
+      const semanticCached = await kv.get(semanticKey);
+
+      if (semanticCached) {
+        await kv.set(cacheKey, semanticCached, { ex: 3600 });
+
+        return res.status(200).json({
+          ...semanticCached,
+          cached: true
+        });
+      }
     }
 
     const providerResults = await Promise.allSettled([
@@ -448,6 +553,10 @@ export default async function handler(req, res) {
 
     if (sources.length > 0) {
       await kv.set(cacheKey, result, { ex: 3600 });
+
+      if (semanticKey) {
+        await kv.set(semanticKey, result, { ex: 3600 });
+      }
     }
 
     return res.status(200).json({
