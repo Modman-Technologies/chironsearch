@@ -12,6 +12,41 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
+function tokenize(text = "") {
+  return text
+    .toLowerCase()
+    .split(/\W+/)
+    .filter(Boolean);
+}
+
+function providersDisagree(a, b) {
+  if (!a || !b) return false;
+
+  const lengthDiff = Math.abs(a.length - b.length);
+  if (lengthDiff > 500) {
+    return true;
+  }
+
+  const wordsA = new Set(tokenize(a));
+  const wordsB = new Set(tokenize(b));
+
+  if (wordsA.size === 0 || wordsB.size === 0) {
+    return false;
+  }
+
+  let overlap = 0;
+
+  wordsA.forEach((word) => {
+    if (wordsB.has(word)) {
+      overlap++;
+    }
+  });
+
+  const similarity = overlap / Math.max(wordsA.size, wordsB.size);
+
+  return similarity < 0.35;
+}
+
 async function fetchWithAbort(url, options, ms, label = "Request") {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ms);
@@ -111,7 +146,7 @@ async function callGemini(query) {
   }
 }
 
-async function synthesizeWithOpenAI(userQuery, openaiAnswer, geminiAnswer) {
+async function synthesizeWithOpenAI(userQuery, openaiAnswer, geminiAnswer, disagreement) {
   const synthesisPrompt = `
 You are Chiron Nexus, an AI broker and synthesis engine.
 
@@ -125,6 +160,12 @@ ${openaiAnswer}
 
 GEMINI ANSWER:
 ${geminiAnswer}
+
+Important:
+- The two providers ${disagreement ? "appear to disagree in meaningful ways" : "mostly agree"}.
+- ${disagreement
+    ? "Be cautious, acknowledge uncertainty where needed, and reconcile differences carefully."
+    : "Produce a clean merged answer using the strongest parts of both."}
 
 Your task:
 - Produce one clear, accurate, concise final answer for the user.
@@ -214,7 +255,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v6:${normalizedQuery}`;
+  const cacheKey = `search:v7:${normalizedQuery}`;
 
   try {
     const cached = await kv.get(cacheKey);
@@ -258,10 +299,13 @@ export default async function handler(req, res) {
     }
 
     if (openaiAnswer && geminiAnswer) {
+      const disagreement = providersDisagree(openaiAnswer, geminiAnswer);
+
       finalAnswer = await synthesizeWithOpenAI(
         normalizedQuery,
         openaiAnswer,
-        geminiAnswer
+        geminiAnswer,
+        disagreement
       );
     }
 
