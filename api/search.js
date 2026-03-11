@@ -447,6 +447,20 @@ async function waitWithTimeout(promise, ms) {
 export default async function handler(req, res) {
   const requestStart = Date.now();
 
+  const allowedOrigins = [
+    "https://chironsearch.vercel.app",
+    "http://localhost:3000"
+  ];
+
+  const origin = req.headers.origin;
+
+  if (origin && !allowedOrigins.includes(origin)) {
+    return res.status(403).json({
+      answer: "Forbidden.",
+      sources: []
+    });
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({
       answer: "Method not allowed.",
