@@ -191,7 +191,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v4:${normalizedQuery}`;
+  const cacheKey = `search:v5:${normalizedQuery}`;
 
   try {
     const cached = await kv.get(cacheKey);
@@ -203,13 +203,24 @@ export default async function handler(req, res) {
       });
     }
 
-    const [openaiAnswer, geminiAnswer] = await Promise.all([
+    const providerResults = await Promise.allSettled([
       withTimeout(callOpenAI(normalizedQuery), 8000, "OpenAI"),
       withTimeout(callGemini(normalizedQuery), 8000, "Gemini")
-    ]).catch((error) => {
-      console.error("Parallel provider error:", error);
-      return [null, null];
-    });
+    ]);
+
+    const openaiAnswer =
+      providerResults[0].status === "fulfilled" ? providerResults[0].value : null;
+
+    const geminiAnswer =
+      providerResults[1].status === "fulfilled" ? providerResults[1].value : null;
+
+    if (providerResults[0].status === "rejected") {
+      console.error("OpenAI provider error:", providerResults[0].reason);
+    }
+
+    if (providerResults[1].status === "rejected") {
+      console.error("Gemini provider error:", providerResults[1].reason);
+    }
 
     let finalAnswer = null;
     let provider = "chiron-nexus";
