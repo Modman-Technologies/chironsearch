@@ -47,6 +47,36 @@ function providersDisagree(a, b) {
   return similarity < 0.35;
 }
 
+function getConfidence(openaiAnswer, geminiAnswer, disagreement) {
+  if (!openaiAnswer || !geminiAnswer) {
+    return "low";
+  }
+
+  if (disagreement) {
+    return "low";
+  }
+
+  const lengthDiff = Math.abs(openaiAnswer.length - geminiAnswer.length);
+  const wordsA = new Set(tokenize(openaiAnswer));
+  const wordsB = new Set(tokenize(geminiAnswer));
+
+  let overlap = 0;
+  wordsA.forEach((word) => {
+    if (wordsB.has(word)) {
+      overlap++;
+    }
+  });
+
+  const similarity =
+    overlap / Math.max(wordsA.size || 1, wordsB.size || 1);
+
+  if (similarity >= 0.65 && lengthDiff < 250) {
+    return "high";
+  }
+
+  return "medium";
+}
+
 async function fetchWithAbort(url, options, ms, label = "Request") {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ms);
@@ -322,7 +352,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v8:${normalizedQuery}`;
+  const cacheKey = `search:v9:${normalizedQuery}`;
 
   try {
     const cached = await kv.get(cacheKey);
@@ -355,6 +385,7 @@ export default async function handler(req, res) {
 
     let finalAnswer = null;
     let provider = "chiron-nexus";
+    let confidence = "low";
     const sources = [];
 
     if (openaiAnswer) {
@@ -367,6 +398,7 @@ export default async function handler(req, res) {
 
     if (openaiAnswer && geminiAnswer) {
       const disagreement = providersDisagree(openaiAnswer, geminiAnswer);
+      confidence = getConfidence(openaiAnswer, geminiAnswer, disagreement);
 
       finalAnswer = await synthesizeWithOpenAI(
         normalizedQuery,
@@ -385,6 +417,7 @@ export default async function handler(req, res) {
         )) || openaiAnswer;
 
       provider = "chiron-nexus";
+      confidence = "low";
     }
 
     if (!finalAnswer && geminiAnswer) {
@@ -396,6 +429,7 @@ export default async function handler(req, res) {
         )) || geminiAnswer;
 
       provider = "chiron-nexus";
+      confidence = "low";
     }
 
     if (!finalAnswer) {
@@ -408,7 +442,8 @@ export default async function handler(req, res) {
     const result = {
       answer: finalAnswer,
       sources,
-      provider
+      provider,
+      confidence
     };
 
     if (sources.length > 0) {
