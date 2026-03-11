@@ -110,7 +110,40 @@ Your task:
 - If both answers are weak or uncertain, say so briefly and give the best cautious answer.
 `;
 
-  return await callOpenAI(synthesisPrompt);
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        input: synthesisPrompt
+      })
+    });
+
+    const data = await response.json();
+    console.error("Synthesis raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const messageItem = (data.output || []).find(
+      (item) => item.type === "message"
+    );
+
+    return (
+      data.output_text ||
+      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
+      messageItem?.content?.[0]?.text ||
+      null
+    );
+  } catch (error) {
+    console.error("Synthesis request error:", error);
+    return null;
+  }
 }
 
 export default async function handler(req, res) {
@@ -131,7 +164,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // Rate limiting
   const ip = getClientIp(req);
   const rateKey = `ratelimit:${ip}`;
   const rateWindowSeconds = 60;
@@ -150,7 +182,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v2:${normalizedQuery}`;
+  const cacheKey = `search:v3:${normalizedQuery}`;
 
   try {
     const cached = await kv.get(cacheKey);
@@ -162,12 +194,14 @@ export default async function handler(req, res) {
       });
     }
 
-    const openaiAnswer = await callOpenAI(normalizedQuery);
-    const geminiAnswer = await callGemini(normalizedQuery);
+    const [openaiAnswer, geminiAnswer] = await Promise.all([
+      callOpenAI(normalizedQuery),
+      callGemini(normalizedQuery)
+    ]);
 
     let finalAnswer = null;
     let provider = "chiron-nexus";
-    let sources = [];
+    const sources = [];
 
     if (openaiAnswer) {
       sources.push("OpenAI Web Search");
