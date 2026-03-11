@@ -155,6 +155,7 @@
         <div class="meta-pill">Confidence: --</div>
         <div class="meta-pill">Provider: --</div>
         <div class="meta-pill">Cached: --</div>
+        <div class="meta-pill">Response Time: --</div>
       </div>
     </div>
 
@@ -181,6 +182,10 @@ function renderDetails(data) {
   const provider = formatProvider(data.provider);
   const cached = data.cached ? "Yes" : "No";
 
+  const responseTime = data.response_time_ms
+    ? (data.response_time_ms / 1000).toFixed(2) + "s"
+    : "--";
+
   const confidenceClass =
     confidence === "high"
       ? "high"
@@ -201,6 +206,9 @@ function renderDetails(data) {
     </div>
     <div class="meta-pill ${cachedClass}">
       Cached: ${cached}
+    </div>
+    <div class="meta-pill">
+      Response Time: ${responseTime}
     </div>
   `;
 }
@@ -228,12 +236,13 @@ async function search() {
   button.innerText = "Searching...";
 
   document.getElementById("unified-answer").innerText =
-    "Chiron Nexus is thinking...";
+    "Consulting multiple AI systems...";
 
   document.getElementById("answer-details").innerHTML = `
     <div class="meta-pill">Confidence: --</div>
     <div class="meta-pill">Provider: --</div>
     <div class="meta-pill">Cached: --</div>
+    <div class="meta-pill">Response Time: --</div>
   `;
 
   document.getElementById("ai-sources").innerHTML =
@@ -267,6 +276,7 @@ async function search() {
       <div class="meta-pill low">Confidence: --</div>
       <div class="meta-pill">Provider: --</div>
       <div class="meta-pill cached-no">Cached: --</div>
+      <div class="meta-pill">Response Time: --</div>
     `;
 
     document.getElementById("ai-sources").innerHTML =
