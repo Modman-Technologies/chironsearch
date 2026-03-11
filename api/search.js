@@ -12,6 +12,107 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
+async function callOpenAI(query) {
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        tools: [{ type: "web_search" }],
+        input: query
+      })
+    });
+
+    const data = await response.json();
+    console.error("OpenAI raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const messageItem = (data.output || []).find(
+      (item) => item.type === "message"
+    );
+
+    return (
+      data.output_text ||
+      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
+      messageItem?.content?.[0]?.text ||
+      null
+    );
+  } catch (error) {
+    console.error("OpenAI request error:", error);
+    return null;
+  }
+}
+
+async function callGemini(query) {
+  try {
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
+        process.env.GEMINI_API_KEY,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: query }]
+            }
+          ]
+        })
+      }
+    );
+
+    const data = await response.json();
+    console.error("Gemini raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch (error) {
+    console.error("Gemini request error:", error);
+    return null;
+  }
+}
+
+async function synthesizeWithOpenAI(userQuery, openaiAnswer, geminiAnswer) {
+  const synthesisPrompt = `
+You are Chiron Nexus, an AI broker and synthesis engine.
+
+The user asked:
+"${userQuery}"
+
+Below are two AI-generated answers from different providers.
+
+OPENAI ANSWER:
+${openaiAnswer}
+
+GEMINI ANSWER:
+${geminiAnswer}
+
+Your task:
+- Produce one clear, accurate, concise final answer for the user.
+- Synthesize the strongest points from both answers.
+- Resolve disagreements cautiously.
+- Do not mention internal analysis.
+- Do not say "OpenAI says" or "Gemini says" in the main answer.
+- Do not use markdown headings.
+- Keep the answer clean and natural.
+- If both answers are weak or uncertain, say so briefly and give the best cautious answer.
+`;
+
+  return await callOpenAI(synthesisPrompt);
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -49,7 +150,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v1:${normalizedQuery}`;
+  const cacheKey = `search:v2:${normalizedQuery}`;
 
   try {
     const cached = await kv.get(cacheKey);
@@ -61,96 +162,53 @@ export default async function handler(req, res) {
       });
     }
 
-    let openaiAnswer = "OpenAI returned no answer.";
-    let geminiAnswer = "Gemini returned no answer.";
+    const openaiAnswer = await callOpenAI(normalizedQuery);
+    const geminiAnswer = await callGemini(normalizedQuery);
+
+    let finalAnswer = null;
+    let provider = "chiron-nexus";
     let sources = [];
 
-    try {
-      const openaiResponse = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: "gpt-4.1-mini",
-          tools: [{ type: "web_search" }],
-          input: normalizedQuery
-        })
-      });
-
-      const openaiData = await openaiResponse.json();
-      console.error("OpenAI raw response:", JSON.stringify(openaiData, null, 2));
-
-      if (!openaiResponse.ok) {
-        openaiAnswer = openaiData.error?.message || "OpenAI request failed.";
-      } else {
-        const messageItem = (openaiData.output || []).find(
-          (item) => item.type === "message"
-        );
-
-        openaiAnswer =
-          openaiData.output_text ||
-          messageItem?.content?.find((part) => part.type === "output_text")?.text ||
-          messageItem?.content?.[0]?.text ||
-          "OpenAI returned no answer.";
-
-        sources.push("OpenAI Web Search");
-      }
-    } catch (error) {
-      console.error("OpenAI request error:", error);
-      openaiAnswer = "OpenAI request error.";
+    if (openaiAnswer) {
+      sources.push("OpenAI Web Search");
     }
 
-    try {
-      const geminiResponse = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-          process.env.GEMINI_API_KEY,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [{ text: normalizedQuery }]
-              }
-            ]
-          })
-        }
+    if (geminiAnswer) {
+      sources.push("Gemini");
+    }
+
+    if (openaiAnswer && geminiAnswer) {
+      finalAnswer = await synthesizeWithOpenAI(
+        normalizedQuery,
+        openaiAnswer,
+        geminiAnswer
       );
+    }
 
-      const geminiData = await geminiResponse.json();
-      console.error("Gemini raw response:", JSON.stringify(geminiData, null, 2));
+    if (!finalAnswer && openaiAnswer) {
+      finalAnswer = openaiAnswer;
+      provider = "openai";
+    }
 
-      if (!geminiResponse.ok) {
-        geminiAnswer = geminiData.error?.message || "Gemini request failed.";
-      } else {
-        geminiAnswer =
-          geminiData.candidates?.[0]?.content?.parts?.[0]?.text ||
-          "Gemini returned no answer.";
+    if (!finalAnswer && geminiAnswer) {
+      finalAnswer = geminiAnswer;
+      provider = "gemini";
+    }
 
-        sources.push("Gemini");
-      }
-    } catch (error) {
-      console.error("Gemini request error:", error);
-      geminiAnswer = "Gemini request error.";
+    if (!finalAnswer) {
+      return res.status(500).json({
+        answer: "Both AI providers failed to return a usable answer.",
+        sources: []
+      });
     }
 
     const result = {
-      answer:
-        "OPENAI:\n\n" +
-        openaiAnswer +
-        "\n\n-------------------\n\nGEMINI:\n\n" +
-        geminiAnswer,
-      sources: sources.length ? sources : ["No providers succeeded"]
+      answer: finalAnswer,
+      sources,
+      provider
     };
 
-    const shouldCache =
-      sources.length > 0 && !sources.includes("No providers succeeded");
-
-    if (shouldCache) {
+    if (sources.length > 0) {
       await kv.set(cacheKey, result, { ex: 3600 });
     }
 
