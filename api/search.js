@@ -25,7 +25,6 @@ export default async function handler(req, res) {
   const cacheKey = `search:v1:${normalizedQuery}`;
 
   try {
-    // 1) Check cache first
     const cached = await kv.get(cacheKey);
 
     if (cached) {
@@ -62,12 +61,12 @@ export default async function handler(req, res) {
           openaiData.error?.message || "OpenAI request failed.";
       } else {
         const messageItem = (openaiData.output || []).find(
-          item => item.type === "message"
+          (item) => item.type === "message"
         );
 
         openaiAnswer =
           openaiData.output_text ||
-          messageItem?.content?.find(part => part.type === "output_text")?.text ||
+          messageItem?.content?.find((part) => part.type === "output_text")?.text ||
           messageItem?.content?.[0]?.text ||
           "OpenAI returned no answer.";
 
@@ -125,7 +124,6 @@ export default async function handler(req, res) {
       sources: sources.length ? sources : ["No providers succeeded"]
     };
 
-    // 2) Store in cache for 1 hour
     await kv.set(cacheKey, result, { ex: 3600 });
 
     return res.status(200).json({
