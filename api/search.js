@@ -12,6 +12,15 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
+function withTimeout(promise, ms, label = "Request") {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    )
+  ]);
+}
+
 async function callOpenAI(query) {
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -182,7 +191,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v3:${normalizedQuery}`;
+  const cacheKey = `search:v4:${normalizedQuery}`;
 
   try {
     const cached = await kv.get(cacheKey);
@@ -195,9 +204,12 @@ export default async function handler(req, res) {
     }
 
     const [openaiAnswer, geminiAnswer] = await Promise.all([
-      callOpenAI(normalizedQuery),
-      callGemini(normalizedQuery)
-    ]);
+      withTimeout(callOpenAI(normalizedQuery), 8000, "OpenAI"),
+      withTimeout(callGemini(normalizedQuery), 8000, "Gemini")
+    ]).catch((error) => {
+      console.error("Parallel provider error:", error);
+      return [null, null];
+    });
 
     let finalAnswer = null;
     let provider = "chiron-nexus";
@@ -212,11 +224,14 @@ export default async function handler(req, res) {
     }
 
     if (openaiAnswer && geminiAnswer) {
-      finalAnswer = await synthesizeWithOpenAI(
-        normalizedQuery,
-        openaiAnswer,
-        geminiAnswer
-      );
+      finalAnswer = await withTimeout(
+        synthesizeWithOpenAI(normalizedQuery, openaiAnswer, geminiAnswer),
+        6000,
+        "Synthesis"
+      ).catch((error) => {
+        console.error("Synthesis timeout/error:", error);
+        return null;
+      });
     }
 
     if (!finalAnswer && openaiAnswer) {
