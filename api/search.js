@@ -402,6 +402,8 @@ Your task:
 }
 
 export default async function handler(req, res) {
+  const requestStart = Date.now();
+
   if (req.method !== "POST") {
     return res.status(405).json({
       answer: "Method not allowed.",
@@ -452,7 +454,8 @@ export default async function handler(req, res) {
     if (cached) {
       return res.status(200).json({
         ...cached,
-        cached: true
+        cached: true,
+        response_time_ms: Date.now() - requestStart
       });
     }
 
@@ -464,7 +467,8 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
           ...semanticCached,
-          cached: true
+          cached: true,
+          response_time_ms: Date.now() - requestStart
         });
       }
     }
@@ -561,7 +565,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ...result,
-      cached: false
+      cached: false,
+      response_time_ms: Date.now() - requestStart
     });
   } catch (error) {
     console.error("Chiron Engine fatal error:", error);
