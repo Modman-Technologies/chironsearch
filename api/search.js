@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   }
 
   const { query } = req.body || {};
-  const normalizedQuery = normalizeQuery(query || "");
+  const normalizedQuery = normalizeQuery((query || "").slice(0, 500));
 
   if (!normalizedQuery) {
     return res.status(400).json({
@@ -38,7 +38,6 @@ export default async function handler(req, res) {
     let geminiAnswer = "Gemini returned no answer.";
     let sources = [];
 
-    // OPENAI REQUEST
     try {
       const openaiResponse = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
@@ -57,8 +56,7 @@ export default async function handler(req, res) {
       console.error("OpenAI raw response:", JSON.stringify(openaiData, null, 2));
 
       if (!openaiResponse.ok) {
-        openaiAnswer =
-          openaiData.error?.message || "OpenAI request failed.";
+        openaiAnswer = openaiData.error?.message || "OpenAI request failed.";
       } else {
         const messageItem = (openaiData.output || []).find(
           (item) => item.type === "message"
@@ -77,7 +75,6 @@ export default async function handler(req, res) {
       openaiAnswer = "OpenAI request error.";
     }
 
-    // GEMINI REQUEST
     try {
       const geminiResponse = await fetch(
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
@@ -101,8 +98,7 @@ export default async function handler(req, res) {
       console.error("Gemini raw response:", JSON.stringify(geminiData, null, 2));
 
       if (!geminiResponse.ok) {
-        geminiAnswer =
-          geminiData.error?.message || "Gemini request failed.";
+        geminiAnswer = geminiData.error?.message || "Gemini request failed.";
       } else {
         geminiAnswer =
           geminiData.candidates?.[0]?.content?.parts?.[0]?.text ||
@@ -124,7 +120,12 @@ export default async function handler(req, res) {
       sources: sources.length ? sources : ["No providers succeeded"]
     };
 
-    await kv.set(cacheKey, result, { ex: 3600 });
+    const shouldCache =
+      sources.length > 0 && !sources.includes("No providers succeeded");
+
+    if (shouldCache) {
+      await kv.set(cacheKey, result, { ex: 3600 });
+    }
 
     return res.status(200).json({
       ...result,
