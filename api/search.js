@@ -219,6 +219,73 @@ Your task:
   }
 }
 
+async function cleanupSingleProviderAnswer(userQuery, providerName, rawAnswer) {
+  const cleanupPrompt = `
+You are Chiron Nexus, an AI broker and answer-normalization engine.
+
+The user asked:
+"${userQuery}"
+
+A single provider returned this draft answer:
+${rawAnswer}
+
+Provider name:
+${providerName}
+
+Your task:
+- Rewrite the answer into a clean final response for the user.
+- Preserve the substance of the answer.
+- Remove markdown headings like # or ##.
+- Remove unnecessary provider-style formatting.
+- Remove obvious link clutter unless a link is genuinely necessary to understand the answer.
+- Keep the answer concise, natural, and readable.
+- Do not mention the provider in the main answer.
+- Do not mention that this answer was rewritten or cleaned up.
+- Do not invent facts that are not already supported by the draft answer.
+- If the draft answer is weak or uncertain, keep the uncertainty but present it clearly.
+`;
+
+  try {
+    const response = await fetchWithAbort(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini",
+          input: cleanupPrompt
+        })
+      },
+      6000,
+      "Single-provider cleanup"
+    );
+
+    const data = await response.json();
+    console.error("Cleanup raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const messageItem = (data.output || []).find(
+      (item) => item.type === "message"
+    );
+
+    return (
+      data.output_text ||
+      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
+      messageItem?.content?.[0]?.text ||
+      null
+    );
+  } catch (error) {
+    console.error("Cleanup request error:", error);
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -255,7 +322,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v7:${normalizedQuery}`;
+  const cacheKey = `search:v8:${normalizedQuery}`;
 
   try {
     const cached = await kv.get(cacheKey);
@@ -310,13 +377,25 @@ export default async function handler(req, res) {
     }
 
     if (!finalAnswer && openaiAnswer) {
-      finalAnswer = openaiAnswer;
-      provider = "openai";
+      finalAnswer =
+        (await cleanupSingleProviderAnswer(
+          normalizedQuery,
+          "OpenAI Web Search",
+          openaiAnswer
+        )) || openaiAnswer;
+
+      provider = "chiron-nexus";
     }
 
     if (!finalAnswer && geminiAnswer) {
-      finalAnswer = geminiAnswer;
-      provider = "gemini";
+      finalAnswer =
+        (await cleanupSingleProviderAnswer(
+          normalizedQuery,
+          "Gemini",
+          geminiAnswer
+        )) || geminiAnswer;
+
+      provider = "chiron-nexus";
     }
 
     if (!finalAnswer) {
