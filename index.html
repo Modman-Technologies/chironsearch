@@ -62,6 +62,11 @@
       background: #1d4ed8;
     }
 
+    button:disabled {
+      background: #475569;
+      cursor: not-allowed;
+    }
+
     .panel {
       background: #1e293b;
       border-radius: 14px;
@@ -81,21 +86,49 @@
       color: #e2e8f0;
       line-height: 1.6;
       font-size: 16px;
+      white-space: pre-wrap;
     }
 
-    .source-list {
+    .source-list,
+    .meta-list {
       display: flex;
       gap: 12px;
       flex-wrap: wrap;
       margin-top: 10px;
     }
 
-    .source-pill {
+    .source-pill,
+    .meta-pill {
       background: #334155;
       color: #e2e8f0;
       padding: 10px 14px;
       border-radius: 999px;
       font-size: 14px;
+    }
+
+    .meta-pill.high {
+      background: #166534;
+      color: #dcfce7;
+    }
+
+    .meta-pill.medium {
+      background: #92400e;
+      color: #fef3c7;
+    }
+
+    .meta-pill.low {
+      background: #7f1d1d;
+      color: #fee2e2;
+    }
+
+    .meta-pill.cached-yes {
+      background: #1d4ed8;
+      color: #dbeafe;
+    }
+
+    .meta-pill.cached-no {
+      background: #475569;
+      color: #e2e8f0;
     }
   </style>
 </head>
@@ -106,13 +139,22 @@
 
     <div class="search-bar">
       <input id="query" type="text" placeholder="Ask anything..." onkeydown="if(event.key==='Enter'){search()}" />
-      <button onclick="search()">Search</button>
+      <button id="search-button" onclick="search()">Search</button>
     </div>
 
     <div class="panel">
       <h2>Unified Answer</h2>
       <div class="answer-text" id="unified-answer">
         Your combined answer will appear here.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Answer Details</h2>
+      <div class="meta-list" id="answer-details">
+        <div class="meta-pill">Confidence: --</div>
+        <div class="meta-pill">Provider: --</div>
+        <div class="meta-pill">Cached: --</div>
       </div>
     </div>
 
@@ -126,8 +168,55 @@
   </div>
 
 <script>
+function formatProvider(provider) {
+  if (!provider) return "--";
+  if (provider === "chiron-nexus") return "Chiron Nexus";
+  if (provider === "openai") return "OpenAI";
+  if (provider === "gemini") return "Gemini";
+  return provider;
+}
+
+function renderDetails(data) {
+  const confidence = (data.confidence || "--").toLowerCase();
+  const provider = formatProvider(data.provider);
+  const cached = data.cached ? "Yes" : "No";
+
+  const confidenceClass =
+    confidence === "high"
+      ? "high"
+      : confidence === "medium"
+      ? "medium"
+      : confidence === "low"
+      ? "low"
+      : "";
+
+  const cachedClass = data.cached ? "cached-yes" : "cached-no";
+
+  document.getElementById("answer-details").innerHTML = `
+    <div class="meta-pill ${confidenceClass}">
+      Confidence: ${confidence.charAt(0).toUpperCase() + confidence.slice(1)}
+    </div>
+    <div class="meta-pill">
+      Provider: ${provider}
+    </div>
+    <div class="meta-pill ${cachedClass}">
+      Cached: ${cached}
+    </div>
+  `;
+}
+
+function renderSources(sources) {
+  const html = (sources || [])
+    .map(src => `<div class="source-pill">${src}</div>`)
+    .join("");
+
+  document.getElementById("ai-sources").innerHTML =
+    html || '<div class="source-pill">No sources</div>';
+}
+
 async function search() {
   const query = document.getElementById("query").value.trim();
+  const button = document.getElementById("search-button");
 
   if (!query) {
     document.getElementById("unified-answer").innerText =
@@ -135,8 +224,20 @@ async function search() {
     return;
   }
 
+  button.disabled = true;
+  button.innerText = "Searching...";
+
   document.getElementById("unified-answer").innerText =
     "Chiron Nexus is thinking...";
+
+  document.getElementById("answer-details").innerHTML = `
+    <div class="meta-pill">Confidence: --</div>
+    <div class="meta-pill">Provider: --</div>
+    <div class="meta-pill">Cached: --</div>
+  `;
+
+  document.getElementById("ai-sources").innerHTML =
+    '<div class="source-pill">Loading...</div>';
 
   try {
     const response = await fetch("/api/search", {
@@ -156,17 +257,23 @@ async function search() {
     document.getElementById("unified-answer").innerText =
       data.answer || "No answer returned.";
 
-    const sources = (data.sources || [])
-      .map(src => `<div class="source-pill">${src}</div>`)
-      .join("");
-
-    document.getElementById("ai-sources").innerHTML =
-      sources || '<div class="source-pill">No sources</div>';
+    renderDetails(data);
+    renderSources(data.sources);
   } catch (error) {
     document.getElementById("unified-answer").innerText =
       error.message || "There was a problem contacting Chiron Engine.";
+
+    document.getElementById("answer-details").innerHTML = `
+      <div class="meta-pill low">Confidence: --</div>
+      <div class="meta-pill">Provider: --</div>
+      <div class="meta-pill cached-no">Cached: --</div>
+    `;
+
     document.getElementById("ai-sources").innerHTML =
       '<div class="source-pill">Unavailable</div>';
+  } finally {
+    button.disabled = false;
+    button.innerText = "Search";
   }
 }
 </script>
