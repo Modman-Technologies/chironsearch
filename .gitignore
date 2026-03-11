@@ -1,0 +1,22 @@
+# Environment variables (secrets)
+.env
+.env.*
+!.env.example
+
+# Node dependencies
+node_modules/
+
+# Vercel build output
+.vercel
+.next
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS junk
+.DS_Store
+Thumbs.db
