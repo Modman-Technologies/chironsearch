@@ -1,13 +1,27 @@
 import { kv } from "@vercel/kv";
+import crypto from "crypto";
 
 const PROVIDER_RACE_GRACE_MS = 1200;
+
+const ALLOWED_ORIGINS = [
+  "https://chironsearch.vercel.app",
+  "http://localhost:3000"
+];
 
 function normalizeQuery(q = "") {
   return q.toLowerCase().trim().replace(/\s+/g, " ");
 }
 
+function getHeader(req, name) {
+  const value = req.headers?.[name.toLowerCase()];
+  if (Array.isArray(value)) {
+    return value[0] || "";
+  }
+  return value || "";
+}
+
 function getClientIp(req) {
-  const forwarded = req.headers["x-forwarded-for"];
+  const forwarded = getHeader(req, "x-forwarded-for");
   if (typeof forwarded === "string" && forwarded.length > 0) {
     return forwarded.split(",")[0].trim();
   }
@@ -174,6 +188,25 @@ function isSemanticCacheSafe(query = "") {
   }
 
   return true;
+}
+
+function buildRequestFingerprint(req) {
+  const ip = getClientIp(req);
+  const userAgent = getHeader(req, "user-agent").slice(0, 300);
+  const origin = getHeader(req, "origin").slice(0, 200);
+
+  return crypto
+    .createHash("sha256")
+    .update(`${ip}|${userAgent}|${origin}`)
+    .digest("hex")
+    .slice(0, 24);
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
+  return ALLOWED_ORIGINS.includes(origin);
 }
 
 async function fetchWithAbort(url, options, ms, label = "Request") {
@@ -447,14 +480,12 @@ async function waitWithTimeout(promise, ms) {
 export default async function handler(req, res) {
   const requestStart = Date.now();
 
-  const allowedOrigins = [
-    "https://chironsearch.vercel.app",
-    "http://localhost:3000"
-  ];
+  const origin = getHeader(req, "origin");
+  const contentType = getHeader(req, "content-type");
+  const userAgent = getHeader(req, "user-agent");
+  const fingerprint = buildRequestFingerprint(req);
 
-  const origin = req.headers.origin;
-
-  if (origin && !allowedOrigins.includes(origin)) {
+  if (!isAllowedOrigin(origin)) {
     return res.status(403).json({
       answer: "Forbidden.",
       sources: []
@@ -468,12 +499,66 @@ export default async function handler(req, res) {
     });
   }
 
+  if (!contentType.includes("application/json")) {
+    return res.status(415).json({
+      answer: "Unsupported content type.",
+      sources: []
+    });
+  }
+
+  if (!userAgent || userAgent.length < 10) {
+    return res.status(400).json({
+      answer: "Invalid request.",
+      sources: []
+    });
+  }
+
+  const fingerprintRateKey = `ratelimit:fingerprint:${fingerprint}`;
+  const fingerprintWindowSeconds = 60;
+  const maxFingerprintRequestsPerWindow = 12;
+
+  const fingerprintCount = await kv.incr(fingerprintRateKey);
+
+  if (fingerprintCount === 1) {
+    await kv.expire(fingerprintRateKey, fingerprintWindowSeconds);
+  }
+
+  if (fingerprintCount > maxFingerprintRequestsPerWindow) {
+    return res.status(429).json({
+      answer: "Too many requests. Please wait a minute and try again.",
+      sources: []
+    });
+  }
+
   const { query } = req.body || {};
   const normalizedQuery = normalizeQuery((query || "").slice(0, 500));
 
   if (!normalizedQuery) {
     return res.status(400).json({
       answer: "No query provided.",
+      sources: []
+    });
+  }
+
+  const queryBurstFingerprint = crypto
+    .createHash("sha256")
+    .update(`${fingerprint}|${normalizedQuery}`)
+    .digest("hex")
+    .slice(0, 24);
+
+  const queryBurstKey = `ratelimit:burst:${queryBurstFingerprint}`;
+  const queryBurstWindowSeconds = 30;
+  const maxSameQueryBurst = 3;
+
+  const queryBurstCount = await kv.incr(queryBurstKey);
+
+  if (queryBurstCount === 1) {
+    await kv.expire(queryBurstKey, queryBurstWindowSeconds);
+  }
+
+  if (queryBurstCount > maxSameQueryBurst) {
+    return res.status(429).json({
+      answer: "Please wait before repeating the same search.",
       sources: []
     });
   }
@@ -496,7 +581,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v11:${normalizedQuery}`;
+  const cacheKey = `search:v12:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
