@@ -1,14 +1,40 @@
-export default async function handler(req, res) {
-  const { query } = req.body || {};
+import { kv } from "@vercel/kv";
 
-  if (!query) {
+function normalizeQuery(q = "") {
+  return q.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      answer: "Method not allowed.",
+      sources: []
+    });
+  }
+
+  const { query } = req.body || {};
+  const normalizedQuery = normalizeQuery(query || "");
+
+  if (!normalizedQuery) {
     return res.status(400).json({
       answer: "No query provided.",
       sources: []
     });
   }
 
+  const cacheKey = `search:v1:${normalizedQuery}`;
+
   try {
+    // 1) Check cache first
+    const cached = await kv.get(cacheKey);
+
+    if (cached) {
+      return res.status(200).json({
+        ...cached,
+        cached: true
+      });
+    }
+
     let openaiAnswer = "OpenAI returned no answer.";
     let geminiAnswer = "Gemini returned no answer.";
     let sources = [];
@@ -24,7 +50,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: "gpt-4.1-mini",
           tools: [{ type: "web_search" }],
-          input: query
+          input: normalizedQuery
         })
       });
 
@@ -65,7 +91,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             contents: [
               {
-                parts: [{ text: query }]
+                parts: [{ text: normalizedQuery }]
               }
             ]
           })
@@ -90,13 +116,21 @@ export default async function handler(req, res) {
       geminiAnswer = "Gemini request error.";
     }
 
-    return res.status(200).json({
+    const result = {
       answer:
         "OPENAI:\n\n" +
         openaiAnswer +
         "\n\n-------------------\n\nGEMINI:\n\n" +
         geminiAnswer,
       sources: sources.length ? sources : ["No providers succeeded"]
+    };
+
+    // 2) Store in cache for 1 hour
+    await kv.set(cacheKey, result, { ex: 3600 });
+
+    return res.status(200).json({
+      ...result,
+      cached: false
     });
   } catch (error) {
     console.error("Chiron Engine fatal error:", error);
