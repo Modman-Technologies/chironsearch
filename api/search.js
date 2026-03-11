@@ -2,8 +2,18 @@ import { kv } from "@vercel/kv";
 import crypto from "crypto";
 
 const PROVIDER_RACE_GRACE_MS = 1200;
+const PROVIDER_SECONDARY_DELAY_MS = 350;
+
+const PROVIDER_FAILURE_THRESHOLD = 3;
+const PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
+
+const PROVIDER_STATE_TTL_SECONDS = 24 * 60 * 60;
+const PROVIDER_STATS_TTL_SECONDS = 7 * 24 * 60 * 60;
+const PROVIDER_LATENCY_ALPHA = 0.35;
 
 const ALLOWED_ORIGINS = [
+  "https://chironnexus.com",
+  "https://www.chironnexus.com",
   "https://chironsearch.vercel.app",
   "http://localhost:3000"
 ];
@@ -207,6 +217,176 @@ function isAllowedOrigin(origin) {
     return true;
   }
   return ALLOWED_ORIGINS.includes(origin);
+}
+
+function getProviderStateKey(providerName) {
+  return `provider:state:v1:${providerName}`;
+}
+
+function getProviderStatsKey(providerName) {
+  return `provider:stats:v1:${providerName}`;
+}
+
+async function getProviderState(providerName) {
+  return (
+    (await kv.get(getProviderStateKey(providerName))) || {
+      failures: 0,
+      cooldown_until: 0,
+      last_error: "",
+      last_error_at: 0,
+      last_success_at: 0
+    }
+  );
+}
+
+async function getProviderStats(providerName) {
+  return (
+    (await kv.get(getProviderStatsKey(providerName))) || {
+      success_count: 0,
+      failure_count: 0,
+      avg_latency_ms: null,
+      last_latency_ms: null,
+      fastest_ms: null,
+      slowest_ms: null,
+      last_success_at: 0,
+      last_failure_at: 0
+    }
+  );
+}
+
+function isProviderCoolingDown(state) {
+  return Number(state?.cooldown_until || 0) > Date.now();
+}
+
+async function recordProviderSuccess(providerName, latencyMs) {
+  const [state, stats] = await Promise.all([
+    getProviderState(providerName),
+    getProviderStats(providerName)
+  ]);
+
+  const nextState = {
+    failures: 0,
+    cooldown_until: 0,
+    last_error: "",
+    last_error_at: Number(state.last_error_at || 0),
+    last_success_at: Date.now()
+  };
+
+  const previousAvg = typeof stats.avg_latency_ms === "number"
+    ? stats.avg_latency_ms
+    : latencyMs;
+
+  const nextAvg =
+    previousAvg + (latencyMs - previousAvg) * PROVIDER_LATENCY_ALPHA;
+
+  const nextStats = {
+    success_count: Number(stats.success_count || 0) + 1,
+    failure_count: Number(stats.failure_count || 0),
+    avg_latency_ms: Math.round(nextAvg),
+    last_latency_ms: latencyMs,
+    fastest_ms:
+      stats.fastest_ms == null
+        ? latencyMs
+        : Math.min(Number(stats.fastest_ms), latencyMs),
+    slowest_ms:
+      stats.slowest_ms == null
+        ? latencyMs
+        : Math.max(Number(stats.slowest_ms), latencyMs),
+    last_success_at: Date.now(),
+    last_failure_at: Number(stats.last_failure_at || 0)
+  };
+
+  await Promise.all([
+    kv.set(getProviderStateKey(providerName), nextState, {
+      ex: PROVIDER_STATE_TTL_SECONDS
+    }),
+    kv.set(getProviderStatsKey(providerName), nextStats, {
+      ex: PROVIDER_STATS_TTL_SECONDS
+    })
+  ]);
+}
+
+async function recordProviderFailure(providerName, latencyMs, errorMessage = "") {
+  const [state, stats] = await Promise.all([
+    getProviderState(providerName),
+    getProviderStats(providerName)
+  ]);
+
+  const nextFailures = Number(state.failures || 0) + 1;
+  const cooldownUntil =
+    nextFailures >= PROVIDER_FAILURE_THRESHOLD
+      ? Date.now() + PROVIDER_COOLDOWN_MS
+      : 0;
+
+  const nextState = {
+    failures: nextFailures,
+    cooldown_until: cooldownUntil,
+    last_error: String(errorMessage || "Unknown provider failure").slice(0, 500),
+    last_error_at: Date.now(),
+    last_success_at: Number(state.last_success_at || 0)
+  };
+
+  const nextStats = {
+    success_count: Number(stats.success_count || 0),
+    failure_count: Number(stats.failure_count || 0) + 1,
+    avg_latency_ms:
+      typeof stats.avg_latency_ms === "number" ? stats.avg_latency_ms : null,
+    last_latency_ms: latencyMs,
+    fastest_ms:
+      stats.fastest_ms == null
+        ? latencyMs
+        : Math.min(Number(stats.fastest_ms), latencyMs),
+    slowest_ms:
+      stats.slowest_ms == null
+        ? latencyMs
+        : Math.max(Number(stats.slowest_ms), latencyMs),
+    last_success_at: Number(stats.last_success_at || 0),
+    last_failure_at: Date.now()
+  };
+
+  await Promise.all([
+    kv.set(getProviderStateKey(providerName), nextState, {
+      ex: PROVIDER_STATE_TTL_SECONDS
+    }),
+    kv.set(getProviderStatsKey(providerName), nextStats, {
+      ex: PROVIDER_STATS_TTL_SECONDS
+    })
+  ]);
+}
+
+function choosePreferredProvider(openaiStats, geminiStats, openaiAvailable, geminiAvailable) {
+  if (openaiAvailable && !geminiAvailable) {
+    return "openai";
+  }
+
+  if (geminiAvailable && !openaiAvailable) {
+    return "gemini";
+  }
+
+  if (!openaiAvailable && !geminiAvailable) {
+    return null;
+  }
+
+  const openaiLatency = openaiStats?.avg_latency_ms;
+  const geminiLatency = geminiStats?.avg_latency_ms;
+
+  if (typeof openaiLatency !== "number" || typeof geminiLatency !== "number") {
+    return null;
+  }
+
+  if (openaiLatency <= geminiLatency * 0.75) {
+    return "openai";
+  }
+
+  if (geminiLatency <= openaiLatency * 0.75) {
+    return "gemini";
+  }
+
+  return null;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function fetchWithAbort(url, options, ms, label = "Request") {
@@ -448,18 +628,58 @@ Your task:
   }
 }
 
-function makeProviderTask(name, promise) {
-  return promise
-    .then((answer) => ({
-      name,
-      answer: answer || null,
-      error: null
-    }))
-    .catch((error) => ({
-      name,
+async function callProviderWithTracking(providerName, query, providerFn, delayMs = 0) {
+  if (delayMs > 0) {
+    await sleep(delayMs);
+  }
+
+  const startedAt = Date.now();
+
+  try {
+    const answer = await providerFn(query);
+    const latencyMs = Date.now() - startedAt;
+
+    if (answer) {
+      await recordProviderSuccess(providerName, latencyMs);
+      return {
+        name: providerName,
+        answer,
+        error: null,
+        latency_ms: latencyMs,
+        skipped: false
+      };
+    }
+
+    await recordProviderFailure(
+      providerName,
+      latencyMs,
+      "No usable answer returned"
+    );
+
+    return {
+      name: providerName,
       answer: null,
-      error
-    }));
+      error: new Error("No usable answer returned"),
+      latency_ms: latencyMs,
+      skipped: false
+    };
+  } catch (error) {
+    const latencyMs = Date.now() - startedAt;
+
+    await recordProviderFailure(
+      providerName,
+      latencyMs,
+      error?.message || "Provider request failed"
+    );
+
+    return {
+      name: providerName,
+      answer: null,
+      error,
+      latency_ms: latencyMs,
+      skipped: false
+    };
+  }
 }
 
 async function waitWithTimeout(promise, ms) {
@@ -581,7 +801,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v12:${normalizedQuery}`;
+  const cacheKey = `search:v13:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
@@ -617,47 +837,125 @@ export default async function handler(req, res) {
       }
     }
 
-    const openaiTask = makeProviderTask(
-      "openai",
-      callOpenAI(normalizedQuery)
-    );
-
-    const geminiTask = makeProviderTask(
-      "gemini",
-      callGemini(normalizedQuery)
-    );
-
-    const firstSettled = await Promise.race([
-      openaiTask.then((result) => ({ ...result, settledBy: "openai" })),
-      geminiTask.then((result) => ({ ...result, settledBy: "gemini" }))
+    const [
+      openaiState,
+      geminiState,
+      openaiStats,
+      geminiStats
+    ] = await Promise.all([
+      getProviderState("openai"),
+      getProviderState("gemini"),
+      getProviderStats("openai"),
+      getProviderStats("gemini")
     ]);
 
-    let openaiResult = null;
-    let geminiResult = null;
+    const openaiCooling = isProviderCoolingDown(openaiState);
+    const geminiCooling = isProviderCoolingDown(geminiState);
 
-    const otherTask =
-      firstSettled.settledBy === "openai" ? geminiTask : openaiTask;
+    const bypassCooldowns = openaiCooling && geminiCooling;
 
-    if (firstSettled.settledBy === "openai") {
-      openaiResult = firstSettled;
-    } else {
-      geminiResult = firstSettled;
-    }
+    const openaiAvailable = bypassCooldowns || !openaiCooling;
+    const geminiAvailable = bypassCooldowns || !geminiCooling;
 
-    if (firstSettled.error) {
-      console.error(
-        `${firstSettled.name} provider error:`,
-        firstSettled.error
+    const preferredProvider = choosePreferredProvider(
+      openaiStats,
+      geminiStats,
+      openaiAvailable,
+      geminiAvailable
+    );
+
+    const openaiDelay =
+      preferredProvider === "gemini" ? PROVIDER_SECONDARY_DELAY_MS : 0;
+
+    const geminiDelay =
+      preferredProvider === "openai" ? PROVIDER_SECONDARY_DELAY_MS : 0;
+
+    let openaiTask = null;
+    let geminiTask = null;
+
+    if (openaiAvailable) {
+      openaiTask = callProviderWithTracking(
+        "openai",
+        normalizedQuery,
+        callOpenAI,
+        openaiDelay
       );
     }
 
-    if (firstSettled.answer) {
-      const otherResult = await waitWithTimeout(
-        otherTask,
-        PROVIDER_RACE_GRACE_MS
+    if (geminiAvailable) {
+      geminiTask = callProviderWithTracking(
+        "gemini",
+        normalizedQuery,
+        callGemini,
+        geminiDelay
       );
+    }
 
-      if (otherResult) {
+    let openaiResult = openaiAvailable
+      ? null
+      : {
+          name: "openai",
+          answer: null,
+          error: new Error("Provider cooling down"),
+          latency_ms: null,
+          skipped: true
+        };
+
+    let geminiResult = geminiAvailable
+      ? null
+      : {
+          name: "gemini",
+          answer: null,
+          error: new Error("Provider cooling down"),
+          latency_ms: null,
+          skipped: true
+        };
+
+    if (openaiTask && geminiTask) {
+      const firstSettled = await Promise.race([
+        openaiTask.then((result) => ({ ...result, settledBy: "openai" })),
+        geminiTask.then((result) => ({ ...result, settledBy: "gemini" }))
+      ]);
+
+      const otherTask =
+        firstSettled.settledBy === "openai" ? geminiTask : openaiTask;
+
+      if (firstSettled.settledBy === "openai") {
+        openaiResult = firstSettled;
+      } else {
+        geminiResult = firstSettled;
+      }
+
+      if (firstSettled.error) {
+        console.error(
+          `${firstSettled.name} provider error:`,
+          firstSettled.error
+        );
+      }
+
+      if (firstSettled.answer) {
+        const otherResult = await waitWithTimeout(
+          otherTask,
+          PROVIDER_RACE_GRACE_MS
+        );
+
+        if (otherResult) {
+          if (otherResult.name === "openai") {
+            openaiResult = otherResult;
+          } else {
+            geminiResult = otherResult;
+          }
+
+          if (otherResult.error) {
+            console.error(
+              `${otherResult.name} provider error:`,
+              otherResult.error
+            );
+          }
+        }
+      } else {
+        const otherResult = await otherTask;
+
         if (otherResult.name === "openai") {
           openaiResult = otherResult;
         } else {
@@ -671,20 +969,17 @@ export default async function handler(req, res) {
           );
         }
       }
-    } else {
-      const otherResult = await otherTask;
+    } else if (openaiTask) {
+      openaiResult = await openaiTask;
 
-      if (otherResult.name === "openai") {
-        openaiResult = otherResult;
-      } else {
-        geminiResult = otherResult;
+      if (openaiResult.error) {
+        console.error("openai provider error:", openaiResult.error);
       }
+    } else if (geminiTask) {
+      geminiResult = await geminiTask;
 
-      if (otherResult.error) {
-        console.error(
-          `${otherResult.name} provider error:`,
-          otherResult.error
-        );
+      if (geminiResult.error) {
+        console.error("gemini provider error:", geminiResult.error);
       }
     }
 
