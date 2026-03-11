@@ -12,29 +12,45 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
-function withTimeout(promise, ms, label = "Request") {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-    )
-  ]);
+async function fetchWithAbort(url, options, ms, label = "Request") {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(`${label} aborted after ${ms}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function callOpenAI(query) {
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+    const response = await fetchWithAbort(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini",
+          tools: [{ type: "web_search" }],
+          input: query
+        })
       },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        tools: [{ type: "web_search" }],
-        input: query
-      })
-    });
+      8000,
+      "OpenAI"
+    );
 
     const data = await response.json();
     console.error("OpenAI raw response:", JSON.stringify(data, null, 2));
@@ -61,7 +77,7 @@ async function callOpenAI(query) {
 
 async function callGemini(query) {
   try {
-    const response = await fetch(
+    const response = await fetchWithAbort(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
         process.env.GEMINI_API_KEY,
       {
@@ -76,7 +92,9 @@ async function callGemini(query) {
             }
           ]
         })
-      }
+      },
+      8000,
+      "Gemini"
     );
 
     const data = await response.json();
@@ -120,17 +138,22 @@ Your task:
 `;
 
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+    const response = await fetchWithAbort(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini",
+          input: synthesisPrompt
+        })
       },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        input: synthesisPrompt
-      })
-    });
+      6000,
+      "Synthesis"
+    );
 
     const data = await response.json();
     console.error("Synthesis raw response:", JSON.stringify(data, null, 2));
@@ -191,7 +214,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v5:${normalizedQuery}`;
+  const cacheKey = `search:v6:${normalizedQuery}`;
 
   try {
     const cached = await kv.get(cacheKey);
@@ -204,8 +227,8 @@ export default async function handler(req, res) {
     }
 
     const providerResults = await Promise.allSettled([
-      withTimeout(callOpenAI(normalizedQuery), 8000, "OpenAI"),
-      withTimeout(callGemini(normalizedQuery), 8000, "Gemini")
+      callOpenAI(normalizedQuery),
+      callGemini(normalizedQuery)
     ]);
 
     const openaiAnswer =
@@ -235,14 +258,11 @@ export default async function handler(req, res) {
     }
 
     if (openaiAnswer && geminiAnswer) {
-      finalAnswer = await withTimeout(
-        synthesizeWithOpenAI(normalizedQuery, openaiAnswer, geminiAnswer),
-        6000,
-        "Synthesis"
-      ).catch((error) => {
-        console.error("Synthesis timeout/error:", error);
-        return null;
-      });
+      finalAnswer = await synthesizeWithOpenAI(
+        normalizedQuery,
+        openaiAnswer,
+        geminiAnswer
+      );
     }
 
     if (!finalAnswer && openaiAnswer) {
