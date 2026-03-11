@@ -455,6 +455,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         ...cached,
         cached: true,
+        cache_type: "exact",
         response_time_ms: Date.now() - requestStart
       });
     }
@@ -468,6 +469,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
           ...semanticCached,
           cached: true,
+          cache_type: "semantic",
           response_time_ms: Date.now() - requestStart
         });
       }
@@ -566,6 +568,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ...result,
       cached: false,
+      cache_type: "none",
       response_time_ms: Date.now() - requestStart
     });
   } catch (error) {
