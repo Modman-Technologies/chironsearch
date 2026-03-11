@@ -1,5 +1,7 @@
 import { kv } from "@vercel/kv";
 
+const PROVIDER_RACE_GRACE_MS = 1200;
+
 function normalizeQuery(q = "") {
   return q.toLowerCase().trim().replace(/\s+/g, " ");
 }
@@ -88,6 +90,7 @@ function fingerprintQuery(q = "") {
     "by",
     "for",
     "from",
+    "give",
     "how",
     "i",
     "in",
@@ -106,7 +109,18 @@ function fingerprintQuery(q = "") {
     "where",
     "which",
     "who",
-    "why"
+    "why",
+    "about",
+    "summary",
+    "summarize",
+    "summaryof",
+    "explain",
+    "explainer",
+    "overview",
+    "intro",
+    "introduction",
+    "describe",
+    "definition"
   ]);
 
   return q
@@ -401,6 +415,35 @@ Your task:
   }
 }
 
+function makeProviderTask(name, promise) {
+  return promise
+    .then((answer) => ({
+      name,
+      answer: answer || null,
+      error: null
+    }))
+    .catch((error) => ({
+      name,
+      answer: null,
+      error
+    }));
+}
+
+async function waitWithTimeout(promise, ms) {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), ms);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    return result;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export default async function handler(req, res) {
   const requestStart = Date.now();
 
@@ -439,13 +482,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v10:${normalizedQuery}`;
+  const cacheKey = `search:v11:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
     : "";
   const semanticKey = semanticFingerprint
-    ? `semantic:v1:${semanticFingerprint}`
+    ? `semantic:v2:${semanticFingerprint}`
     : "";
 
   try {
@@ -475,24 +518,79 @@ export default async function handler(req, res) {
       }
     }
 
-    const providerResults = await Promise.allSettled([
-      callOpenAI(normalizedQuery),
+    const openaiTask = makeProviderTask(
+      "openai",
+      callOpenAI(normalizedQuery)
+    );
+
+    const geminiTask = makeProviderTask(
+      "gemini",
       callGemini(normalizedQuery)
+    );
+
+    const firstSettled = await Promise.race([
+      openaiTask.then((result) => ({ ...result, settledBy: "openai" })),
+      geminiTask.then((result) => ({ ...result, settledBy: "gemini" }))
     ]);
 
-    const openaiAnswer =
-      providerResults[0].status === "fulfilled" ? providerResults[0].value : null;
+    let openaiResult = null;
+    let geminiResult = null;
 
-    const geminiAnswer =
-      providerResults[1].status === "fulfilled" ? providerResults[1].value : null;
+    const otherTask =
+      firstSettled.settledBy === "openai" ? geminiTask : openaiTask;
 
-    if (providerResults[0].status === "rejected") {
-      console.error("OpenAI provider error:", providerResults[0].reason);
+    if (firstSettled.settledBy === "openai") {
+      openaiResult = firstSettled;
+    } else {
+      geminiResult = firstSettled;
     }
 
-    if (providerResults[1].status === "rejected") {
-      console.error("Gemini provider error:", providerResults[1].reason);
+    if (firstSettled.error) {
+      console.error(
+        `${firstSettled.name} provider error:`,
+        firstSettled.error
+      );
     }
+
+    if (firstSettled.answer) {
+      const otherResult = await waitWithTimeout(
+        otherTask,
+        PROVIDER_RACE_GRACE_MS
+      );
+
+      if (otherResult) {
+        if (otherResult.name === "openai") {
+          openaiResult = otherResult;
+        } else {
+          geminiResult = otherResult;
+        }
+
+        if (otherResult.error) {
+          console.error(
+            `${otherResult.name} provider error:`,
+            otherResult.error
+          );
+        }
+      }
+    } else {
+      const otherResult = await otherTask;
+
+      if (otherResult.name === "openai") {
+        openaiResult = otherResult;
+      } else {
+        geminiResult = otherResult;
+      }
+
+      if (otherResult.error) {
+        console.error(
+          `${otherResult.name} provider error:`,
+          otherResult.error
+        );
+      }
+    }
+
+    const openaiAnswer = openaiResult?.answer || null;
+    const geminiAnswer = geminiResult?.answer || null;
 
     let finalAnswer = null;
     let provider = "chiron-nexus";
