@@ -31,23 +31,23 @@ export default async function handler(req, res) {
   }
 
   // Rate limiting
-const ip = getClientIp(req);
-const rateKey = `ratelimit:${ip}`;
-const rateWindowSeconds = 60;
-const maxRequestsPerWindow = 10;
+  const ip = getClientIp(req);
+  const rateKey = `ratelimit:${ip}`;
+  const rateWindowSeconds = 60;
+  const maxRequestsPerWindow = 10;
 
-const currentCount = await kv.incr(rateKey);
+  const currentCount = await kv.incr(rateKey);
 
-if (currentCount === 1) {
-  await kv.expire(rateKey, rateWindowSeconds);
-}
+  if (currentCount === 1) {
+    await kv.expire(rateKey, rateWindowSeconds);
+  }
 
-if (currentCount > maxRequestsPerWindow) {
-  return res.status(429).json({
-    answer: "Too many searches. Please wait a minute and try again.",
-    sources: []
-  });
-}
+  if (currentCount > maxRequestsPerWindow) {
+    return res.status(429).json({
+      answer: "Too many searches. Please wait a minute and try again.",
+      sources: []
+    });
+  }
 
   const cacheKey = `search:v1:${normalizedQuery}`;
 
