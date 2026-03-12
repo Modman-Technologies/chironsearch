@@ -1,6 +1,9 @@
 import { kv } from "@vercel/kv";
 import crypto from "crypto";
 
+const SEARCH_ENABLED = process.env.SEARCH_ENABLED !== "false";
+const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
+
 const PROVIDER_RACE_GRACE_MS = 1200;
 const PROVIDER_SECONDARY_DELAY_MS = 350;
 
@@ -11,12 +14,21 @@ const PROVIDER_STATE_TTL_SECONDS = 24 * 60 * 60;
 const PROVIDER_STATS_TTL_SECONDS = 7 * 24 * 60 * 60;
 const PROVIDER_LATENCY_ALPHA = 0.35;
 
+const EXACT_CACHE_TTL_SECONDS = 3600;
+const SEMANTIC_CACHE_TTL_SECONDS = 3600;
+
 const ALLOWED_ORIGINS = [
   "https://chironnexus.com",
   "https://www.chironnexus.com",
   "https://chironsearch.vercel.app",
   "http://localhost:3000"
 ];
+
+function debugLog(...args) {
+  if (DEBUG_LOGS) {
+    console.error(...args);
+  }
+}
 
 function normalizeQuery(q = "") {
   return q.toLowerCase().trim().replace(/\s+/g, " ");
@@ -45,19 +57,12 @@ function tokenize(text = "") {
     .filter(Boolean);
 }
 
-function providersDisagree(a, b) {
-  if (!a || !b) return false;
-
-  const lengthDiff = Math.abs(a.length - b.length);
-  if (lengthDiff > 500) {
-    return true;
-  }
-
+function calculateSimilarity(a = "", b = "") {
   const wordsA = new Set(tokenize(a));
   const wordsB = new Set(tokenize(b));
 
   if (wordsA.size === 0 || wordsB.size === 0) {
-    return false;
+    return 0;
   }
 
   let overlap = 0;
@@ -68,8 +73,18 @@ function providersDisagree(a, b) {
     }
   });
 
-  const similarity = overlap / Math.max(wordsA.size, wordsB.size);
+  return overlap / Math.max(wordsA.size, wordsB.size);
+}
 
+function providersDisagree(a, b) {
+  if (!a || !b) return false;
+
+  const lengthDiff = Math.abs(a.length - b.length);
+  if (lengthDiff > 500) {
+    return true;
+  }
+
+  const similarity = calculateSimilarity(a, b);
   return similarity < 0.35;
 }
 
@@ -83,24 +98,34 @@ function getConfidence(openaiAnswer, geminiAnswer, disagreement) {
   }
 
   const lengthDiff = Math.abs(openaiAnswer.length - geminiAnswer.length);
-  const wordsA = new Set(tokenize(openaiAnswer));
-  const wordsB = new Set(tokenize(geminiAnswer));
-
-  let overlap = 0;
-  wordsA.forEach((word) => {
-    if (wordsB.has(word)) {
-      overlap++;
-    }
-  });
-
-  const similarity =
-    overlap / Math.max(wordsA.size || 1, wordsB.size || 1);
+  const similarity = calculateSimilarity(openaiAnswer, geminiAnswer);
 
   if (similarity >= 0.65 && lengthDiff < 250) {
     return "high";
   }
 
   return "medium";
+}
+
+function shouldSkipSynthesis(openaiAnswer, geminiAnswer, disagreement) {
+  if (!openaiAnswer || !geminiAnswer || disagreement) {
+    return false;
+  }
+
+  const similarity = calculateSimilarity(openaiAnswer, geminiAnswer);
+  const lengthDiff = Math.abs(openaiAnswer.length - geminiAnswer.length);
+
+  return similarity >= 0.82 && lengthDiff < 180;
+}
+
+function pickBestDirectAnswer(openaiAnswer, geminiAnswer) {
+  const openaiLength = openaiAnswer?.length || 0;
+  const geminiLength = geminiAnswer?.length || 0;
+
+  if (openaiLength === 0) return geminiAnswer || null;
+  if (geminiLength === 0) return openaiAnswer || null;
+
+  return openaiLength >= geminiLength ? openaiAnswer : geminiAnswer;
 }
 
 function fingerprintQuery(q = "") {
@@ -409,6 +434,162 @@ async function fetchWithAbort(url, options, ms, label = "Request") {
   }
 }
 
+function extractOutputTextParts(data) {
+  const output = Array.isArray(data?.output) ? data.output : [];
+  const parts = [];
+
+  for (const item of output) {
+    if (item?.type !== "message") continue;
+    const content = Array.isArray(item.content) ? item.content : [];
+    for (const part of content) {
+      if (part?.type === "output_text") {
+        parts.push(part);
+      }
+    }
+  }
+
+  return parts;
+}
+
+function dedupeSourceLinks(links = []) {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const link of links) {
+    const key = `${link.url}|${link.title}`;
+    if (!link.url || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(link);
+  }
+
+  return deduped.slice(0, 8);
+}
+
+function extractOpenAISourceLinks(data) {
+  const parts = extractOutputTextParts(data);
+  const links = [];
+
+  for (const part of parts) {
+    const annotations = Array.isArray(part.annotations) ? part.annotations : [];
+
+    for (const annotation of annotations) {
+      if (annotation?.type !== "url_citation") continue;
+
+      const url = annotation.url || annotation.uri || "";
+      const title =
+        annotation.title ||
+        annotation.text ||
+        annotation.display_text ||
+        url;
+
+      if (!url) continue;
+
+      links.push({
+        title: String(title).slice(0, 300),
+        url: String(url).slice(0, 1000),
+        provider: "OpenAI Web Search"
+      });
+    }
+  }
+
+  return dedupeSourceLinks(links);
+}
+
+function isVisualQuery(query = "") {
+  const q = query.toLowerCase();
+
+  return [
+    "what does ",
+    "what does a ",
+    "what does an ",
+    "what does the ",
+    "look like",
+    "show me ",
+    "image of ",
+    "picture of ",
+    "photo of ",
+    "what is a ",
+    "what is an "
+  ].some((pattern) => q.includes(pattern)) &&
+    (q.includes("look like") ||
+      q.startsWith("show me ") ||
+      q.startsWith("image of ") ||
+      q.startsWith("picture of ") ||
+      q.startsWith("photo of "));
+}
+
+function extractVisualSubject(query = "") {
+  let q = query.trim().toLowerCase();
+
+  q = q
+    .replace(/^what does\s+/, "")
+    .replace(/^show me\s+/, "")
+    .replace(/^image of\s+/, "")
+    .replace(/^picture of\s+/, "")
+    .replace(/^photo of\s+/, "")
+    .replace(/^what is\s+/, "")
+    .replace(/\s+look like\??$/, "")
+    .replace(/[?!.]+$/g, "")
+    .trim();
+
+  q = q
+    .replace(/^(a|an|the)\s+/, "")
+    .trim();
+
+  return q.slice(0, 120);
+}
+
+async function fetchWikipediaReferenceImage(subject) {
+  if (!subject) return null;
+
+  const title = subject
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join("_");
+
+  const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+
+  try {
+    const response = await fetchWithAbort(
+      url,
+      {
+        method: "GET",
+        headers: {
+          "Accept": "application/json"
+        }
+      },
+      3500,
+      "Wikipedia image lookup"
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    const imageUrl =
+      data?.thumbnail?.source ||
+      data?.originalimage?.source ||
+      null;
+
+    if (!imageUrl) {
+      return null;
+    }
+
+    return {
+      url: imageUrl,
+      title: data?.title || subject,
+      caption: data?.description || `Reference image for ${subject}`,
+      source_url: data?.content_urls?.desktop?.page || data?.content_urls?.mobile?.page || "",
+      provider: "Wikipedia"
+    };
+  } catch (error) {
+    debugLog("Wikipedia image lookup failed:", error?.message || error);
+    return null;
+  }
+}
+
 async function callOpenAI(query) {
   try {
     const response = await fetchWithAbort(
@@ -430,7 +611,7 @@ async function callOpenAI(query) {
     );
 
     const data = await response.json();
-    console.error("OpenAI raw response:", JSON.stringify(data, null, 2));
+    debugLog("OpenAI raw response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return null;
@@ -440,12 +621,16 @@ async function callOpenAI(query) {
       (item) => item.type === "message"
     );
 
-    return (
+    const answer =
       data.output_text ||
       messageItem?.content?.find((part) => part.type === "output_text")?.text ||
       messageItem?.content?.[0]?.text ||
-      null
-    );
+      null;
+
+    return {
+      answer,
+      source_links: extractOpenAISourceLinks(data)
+    };
   } catch (error) {
     console.error("OpenAI request error:", error);
     return null;
@@ -475,13 +660,16 @@ async function callGemini(query) {
     );
 
     const data = await response.json();
-    console.error("Gemini raw response:", JSON.stringify(data, null, 2));
+    debugLog("Gemini raw response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return null;
     }
 
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+    return {
+      answer: data.candidates?.[0]?.content?.parts?.[0]?.text || null,
+      source_links: []
+    };
   } catch (error) {
     console.error("Gemini request error:", error);
     return null;
@@ -539,7 +727,7 @@ Your task:
     );
 
     const data = await response.json();
-    console.error("Synthesis raw response:", JSON.stringify(data, null, 2));
+    debugLog("Synthesis raw response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return null;
@@ -606,7 +794,7 @@ Your task:
     );
 
     const data = await response.json();
-    console.error("Cleanup raw response:", JSON.stringify(data, null, 2));
+    debugLog("Cleanup raw response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return null;
@@ -636,14 +824,15 @@ async function callProviderWithTracking(providerName, query, providerFn, delayMs
   const startedAt = Date.now();
 
   try {
-    const answer = await providerFn(query);
+    const result = await providerFn(query);
     const latencyMs = Date.now() - startedAt;
 
-    if (answer) {
+    if (result?.answer) {
       await recordProviderSuccess(providerName, latencyMs);
       return {
         name: providerName,
-        answer,
+        answer: result.answer,
+        source_links: Array.isArray(result.source_links) ? result.source_links : [],
         error: null,
         latency_ms: latencyMs,
         skipped: false
@@ -659,6 +848,7 @@ async function callProviderWithTracking(providerName, query, providerFn, delayMs
     return {
       name: providerName,
       answer: null,
+      source_links: [],
       error: new Error("No usable answer returned"),
       latency_ms: latencyMs,
       skipped: false
@@ -675,6 +865,7 @@ async function callProviderWithTracking(providerName, query, providerFn, delayMs
     return {
       name: providerName,
       answer: null,
+      source_links: [],
       error,
       latency_ms: latencyMs,
       skipped: false
@@ -699,6 +890,13 @@ async function waitWithTimeout(promise, ms) {
 
 export default async function handler(req, res) {
   const requestStart = Date.now();
+
+  if (!SEARCH_ENABLED) {
+    return res.status(503).json({
+      answer: "Search is temporarily disabled.",
+      sources: []
+    });
+  }
 
   const origin = getHeader(req, "origin");
   const contentType = getHeader(req, "content-type");
@@ -801,7 +999,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v13:${normalizedQuery}`;
+  const cacheKey = `search:v15:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
@@ -826,7 +1024,7 @@ export default async function handler(req, res) {
       const semanticCached = await kv.get(semanticKey);
 
       if (semanticCached) {
-        await kv.set(cacheKey, semanticCached, { ex: 3600 });
+        await kv.set(cacheKey, semanticCached, { ex: EXACT_CACHE_TTL_SECONDS });
 
         return res.status(200).json({
           ...semanticCached,
@@ -896,6 +1094,7 @@ export default async function handler(req, res) {
       : {
           name: "openai",
           answer: null,
+          source_links: [],
           error: new Error("Provider cooling down"),
           latency_ms: null,
           skipped: true
@@ -906,6 +1105,7 @@ export default async function handler(req, res) {
       : {
           name: "gemini",
           answer: null,
+          source_links: [],
           error: new Error("Provider cooling down"),
           latency_ms: null,
           skipped: true
@@ -989,7 +1189,12 @@ export default async function handler(req, res) {
     let finalAnswer = null;
     let provider = "chiron-nexus";
     let confidence = "low";
+    let synthesisSkipped = false;
     const sources = [];
+    const sourceLinks = dedupeSourceLinks([
+      ...(openaiResult?.source_links || []),
+      ...(geminiResult?.source_links || [])
+    ]);
 
     if (openaiAnswer) {
       sources.push("OpenAI Web Search");
@@ -1003,12 +1208,23 @@ export default async function handler(req, res) {
       const disagreement = providersDisagree(openaiAnswer, geminiAnswer);
       confidence = getConfidence(openaiAnswer, geminiAnswer, disagreement);
 
-      finalAnswer = await synthesizeWithOpenAI(
-        normalizedQuery,
-        openaiAnswer,
-        geminiAnswer,
-        disagreement
-      );
+      if (shouldSkipSynthesis(openaiAnswer, geminiAnswer, disagreement)) {
+        finalAnswer =
+          (await cleanupSingleProviderAnswer(
+            normalizedQuery,
+            "Chiron Nexus Direct Merge",
+            pickBestDirectAnswer(openaiAnswer, geminiAnswer)
+          )) || pickBestDirectAnswer(openaiAnswer, geminiAnswer);
+
+        synthesisSkipped = true;
+      } else {
+        finalAnswer = await synthesizeWithOpenAI(
+          normalizedQuery,
+          openaiAnswer,
+          geminiAnswer,
+          disagreement
+        );
+      }
     }
 
     if (!finalAnswer && openaiAnswer) {
@@ -1042,18 +1258,29 @@ export default async function handler(req, res) {
       });
     }
 
+    let referenceImage = null;
+
+    if (isVisualQuery(normalizedQuery)) {
+      referenceImage = await fetchWikipediaReferenceImage(
+        extractVisualSubject(normalizedQuery)
+      );
+    }
+
     const result = {
       answer: finalAnswer,
       sources,
+      source_links: sourceLinks,
+      reference_image: referenceImage,
       provider,
-      confidence
+      confidence,
+      synthesis_skipped: synthesisSkipped
     };
 
     if (sources.length > 0) {
-      await kv.set(cacheKey, result, { ex: 3600 });
+      await kv.set(cacheKey, result, { ex: EXACT_CACHE_TTL_SECONDS });
 
       if (semanticKey) {
-        await kv.set(semanticKey, result, { ex: 3600 });
+        await kv.set(semanticKey, result, { ex: SEMANTIC_CACHE_TTL_SECONDS });
       }
     }
 
