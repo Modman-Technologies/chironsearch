@@ -18,6 +18,8 @@ const EXACT_CACHE_TTL_SECONDS = 3600;
 const SEMANTIC_CACHE_TTL_SECONDS = 3600;
 
 const MAX_PROVIDERS_PER_QUERY = 3;
+const MAX_SOURCE_LINKS = 10;
+const MAX_HISTORICAL_REFERENCES = 8;
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -34,6 +36,15 @@ const ALLOWED_ORIGINS = [
   "https://chironsearch.vercel.app",
   "http://localhost:3000"
 ];
+
+const HISTORICAL_YEAR_REGEX = /\b(1[6-9]\d{2})\b/g;
+const HISTORICAL_DECADE_REGEX = /\b(1[6-9]\d0s)\b/i;
+
+const ACCESS_TIERS = {
+  PUBLIC: "public",
+  PAID: "paid",
+  ADMIN: "admin"
+};
 
 const PROVIDERS = [
   {
@@ -323,6 +334,97 @@ function getProviderStatsKey(providerName) {
   return `provider:stats:v1:${providerName}`;
 }
 
+function getRequestQueueKey(normalizedQuery) {
+  return `search:request:v1:${normalizedQuery}`;
+}
+
+function getLiveAccessMode(req) {
+  const explicitAccess = getHeader(req, "x-chiron-access").toLowerCase().trim();
+  const adminKeyHeader = getHeader(req, "x-chiron-admin-key");
+  const adminKeyEnv = process.env.CHIRON_ADMIN_KEY || "";
+
+  if (adminKeyEnv && adminKeyHeader && adminKeyHeader === adminKeyEnv) {
+    return ACCESS_TIERS.ADMIN;
+  }
+
+  if (explicitAccess === ACCESS_TIERS.ADMIN && DEBUG_LOGS) {
+    return ACCESS_TIERS.ADMIN;
+  }
+
+  if (explicitAccess === ACCESS_TIERS.PAID) {
+    return ACCESS_TIERS.PAID;
+  }
+
+  return ACCESS_TIERS.PUBLIC;
+}
+
+function isLiveSearchAllowed(accessTier) {
+  return accessTier === ACCESS_TIERS.PAID || accessTier === ACCESS_TIERS.ADMIN;
+}
+
+function shouldForceLiveSearch(req, accessTier) {
+  if (!isLiveSearchAllowed(accessTier)) {
+    return false;
+  }
+
+  return getHeader(req, "x-chiron-force-live").toLowerCase() === "true";
+}
+
+function buildPublicCacheMissResponse(normalizedQuery, queryType, requestStart) {
+  return {
+    answer:
+      "No cached answer is available for that search yet. Live search is currently limited to authorized users.",
+    sources: [],
+    source_links: [],
+    reference_image: null,
+    historical_references: [],
+    provider: "chiron-cache",
+    confidence: "low",
+    query_type: queryType,
+    consensus_level: null,
+    arbitration_reason: null,
+    outlier_providers: [],
+    synthesis_skipped: false,
+    cached: false,
+    cache_type: "miss",
+    response_time_ms: Date.now() - requestStart,
+    access_tier: ACCESS_TIERS.PUBLIC,
+    live_search_used: false,
+    live_search_available: false,
+    cache_only_mode: true,
+    cache_miss: true,
+    query: normalizedQuery,
+    request_queued: false,
+    upgrade_required: true
+  };
+}
+
+async function markPublicCacheMissRequest(normalizedQuery) {
+  try {
+    const key = getRequestQueueKey(normalizedQuery);
+    const now = Date.now();
+
+    const existing = (await kv.get(key)) || {
+      count: 0,
+      first_requested_at: now,
+      last_requested_at: now
+    };
+
+    const next = {
+      count: Number(existing.count || 0) + 1,
+      first_requested_at: Number(existing.first_requested_at || now),
+      last_requested_at: now
+    };
+
+    await kv.set(key, next, { ex: 7 * 24 * 60 * 60 });
+
+    return next;
+  } catch (error) {
+    debugLog("Failed to record cache miss request:", error?.message || error);
+    return null;
+  }
+}
+
 async function getProviderState(providerName) {
   return (
     (await kv.get(getProviderStateKey(providerName))) || {
@@ -559,7 +661,21 @@ function dedupeSourceLinks(links = []) {
     deduped.push(link);
   }
 
-  return deduped.slice(0, 10);
+  return deduped.slice(0, MAX_SOURCE_LINKS);
+}
+
+function dedupeHistoricalReferences(items = []) {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const item of items) {
+    const key = `${item?.source || ""}|${item?.title || ""}|${item?.url || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+
+  return deduped.slice(0, MAX_HISTORICAL_REFERENCES);
 }
 
 function extractOutputTextParts(data) {
@@ -681,6 +797,39 @@ function isVisualQuery(query = "") {
       q.startsWith("picture of ") ||
       q.startsWith("photo of "))
   );
+}
+
+function hasHistoricalSignals(query = "") {
+  const q = query.toLowerCase();
+
+  const explicitSignals = [
+    "historically",
+    "history of ",
+    "how did people",
+    "used to think",
+    "old encyclopedia",
+    "old encyclopaedia",
+    "historical view",
+    "historical perspective",
+    "what was known about",
+    "what did people believe",
+    "what was believed about",
+    "in the 1800s",
+    "in the 1700s",
+    "in the 1600s",
+    "in the 1900s"
+  ];
+
+  if (explicitSignals.some((pattern) => q.includes(pattern))) {
+    return true;
+  }
+
+  if (HISTORICAL_DECADE_REGEX.test(q)) {
+    return true;
+  }
+
+  const years = q.match(HISTORICAL_YEAR_REGEX) || [];
+  return years.length > 0;
 }
 
 function extractVisualSubject(query = "") {
@@ -840,16 +989,7 @@ function classifyQuery(query = "") {
     return "visual";
   }
 
-  if (
-    q.includes("historically") ||
-    q.includes("history of ") ||
-    q.includes("how did people") ||
-    q.includes("used to think") ||
-    q.includes("old encyclopedia") ||
-    q.includes("in 18") ||
-    q.includes("in 19") ||
-    q.includes("in 20")
-  ) {
+  if (hasHistoricalSignals(q)) {
     return "historical";
   }
 
@@ -925,9 +1065,14 @@ function scoreAnswer({ answer, sourceLinks = [], query, queryType }) {
 
 function normalizeHistoricalSubject(query = "") {
   return query
-    .replace(/\b(historically|history of|old encyclopedia|used to think|how did people)\b/gi, " ")
-    .replace(/\b(in\s+(18|19|20)\d{2})\b/gi, " ")
+    .replace(
+      /\b(historically|history of|old encyclopedia|old encyclopaedia|used to think|how did people|historical view|historical perspective|what was known about|what did people believe|what was believed about)\b/gi,
+      " "
+    )
+    .replace(/\b(in\s+(1[6-9]\d{2}))\b/gi, " ")
+    .replace(/\b(1[6-9]\d0s)\b/gi, " ")
     .replace(/[?!.]+$/g, "")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, 140);
 }
@@ -1023,6 +1168,103 @@ async function fetchInternetArchiveHistoricalReferences(subject) {
   }
 }
 
+async function fetchProjectGutenbergHistoricalReferences(subject) {
+  if (!subject) return [];
+
+  const url = `https://gutendex.com/books?search=${encodeURIComponent(subject)}`;
+
+  try {
+    const response = await fetchWithAbort(
+      url,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      4500,
+      "Project Gutenberg search"
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    const results = Array.isArray(data?.results) ? data.results : [];
+
+    return results.slice(0, 3).map((book) => ({
+      source: "Project Gutenberg",
+      title: book.title || "Untitled",
+      year: null,
+      author:
+        Array.isArray(book.authors) && book.authors.length > 0
+          ? book.authors
+              .slice(0, 2)
+              .map((author) => author.name)
+              .filter(Boolean)
+              .join(", ")
+          : null,
+      url:
+        book.formats?.["text/html"] ||
+        book.formats?.["text/html; charset=utf-8"] ||
+        book.formats?.["text/plain; charset=utf-8"] ||
+        book.formats?.["text/plain"] ||
+        "",
+      summary: Array.isArray(book.subjects)
+        ? book.subjects.slice(0, 2).join(" • ")
+        : null
+    }));
+  } catch (error) {
+    debugLog("Project Gutenberg historical lookup failed:", error?.message || error);
+    return [];
+  }
+}
+
+async function fetchWikidataHistoricalReferences(subject) {
+  if (!subject) return [];
+
+  const url =
+    `https://www.wikidata.org/w/api.php?action=wbsearchentities` +
+    `&search=${encodeURIComponent(subject)}` +
+    `&language=en&format=json&limit=3&origin=*`;
+
+  try {
+    const response = await fetchWithAbort(
+      url,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      4000,
+      "Wikidata search"
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    const results = Array.isArray(data?.search) ? data.search : [];
+
+    return results.slice(0, 3).map((item) => ({
+      source: "Wikidata",
+      title: item.label || "Untitled",
+      year: null,
+      author: null,
+      url: item.id
+        ? `https://www.wikidata.org/wiki/${encodeURIComponent(item.id)}`
+        : "",
+      summary: item.description || null
+    }));
+  } catch (error) {
+    debugLog("Wikidata historical lookup failed:", error?.message || error);
+    return [];
+  }
+}
+
 async function fetchHistoricalReferences(query, queryType) {
   if (queryType !== "historical") {
     return [];
@@ -1030,12 +1272,23 @@ async function fetchHistoricalReferences(query, queryType) {
 
   const subject = normalizeHistoricalSubject(query);
 
-  const [openLibrary, internetArchive] = await Promise.all([
+  if (!subject) {
+    return [];
+  }
+
+  const [openLibrary, internetArchive, gutenberg, wikidata] = await Promise.all([
     fetchOpenLibraryHistoricalReferences(subject),
-    fetchInternetArchiveHistoricalReferences(subject)
+    fetchInternetArchiveHistoricalReferences(subject),
+    fetchProjectGutenbergHistoricalReferences(subject),
+    fetchWikidataHistoricalReferences(subject)
   ]);
 
-  return [...openLibrary, ...internetArchive].slice(0, 5);
+  return dedupeHistoricalReferences([
+    ...openLibrary,
+    ...internetArchive,
+    ...gutenberg,
+    ...wikidata
+  ]).slice(0, 6);
 }
 
 async function callOpenAI(query) {
@@ -1728,6 +1981,9 @@ export default async function handler(req, res) {
   const contentType = getHeader(req, "content-type");
   const userAgent = getHeader(req, "user-agent");
   const fingerprint = buildRequestFingerprint(req);
+  const accessTier = getLiveAccessMode(req);
+  const liveSearchAllowed = isLiveSearchAllowed(accessTier);
+  const forceLive = shouldForceLiveSearch(req, accessTier);
 
   if (!isAllowedOrigin(origin)) {
     return res.status(403).json({
@@ -1827,41 +2083,73 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v20:${normalizedQuery}`;
+  const cacheKey = `search:v23:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
     : "";
   const semanticKey = semanticFingerprint
-    ? `semantic:v6:${semanticFingerprint}`
+    ? `semantic:v9:${semanticFingerprint}`
     : "";
 
   try {
-    const cached = await kv.get(cacheKey);
+    if (!forceLive) {
+      const cached = await kv.get(cacheKey);
 
-    if (cached) {
+      if (cached) {
+        return res.status(200).json({
+          ...cached,
+          cached: true,
+          cache_type: "exact",
+          response_time_ms: Date.now() - requestStart,
+          access_tier: accessTier,
+          live_search_used: false,
+          live_search_available: liveSearchAllowed,
+          cache_only_mode: accessTier === ACCESS_TIERS.PUBLIC
+        });
+      }
+
+      if (semanticKey) {
+        const semanticCached = await kv.get(semanticKey);
+
+        if (semanticCached) {
+          await kv.set(cacheKey, semanticCached, { ex: EXACT_CACHE_TTL_SECONDS });
+
+          return res.status(200).json({
+            ...semanticCached,
+            cached: true,
+            cache_type: "semantic",
+            response_time_ms: Date.now() - requestStart,
+            access_tier: accessTier,
+            live_search_used: false,
+            live_search_available: liveSearchAllowed,
+            cache_only_mode: accessTier === ACCESS_TIERS.PUBLIC
+          });
+        }
+      }
+    }
+
+    if (!liveSearchAllowed) {
+      const queueMeta = await markPublicCacheMissRequest(normalizedQuery);
+      const missResponse = buildPublicCacheMissResponse(
+        normalizedQuery,
+        queryType,
+        requestStart
+      );
+
       return res.status(200).json({
-        ...cached,
-        cached: true,
-        cache_type: "exact",
-        response_time_ms: Date.now() - requestStart
+        ...missResponse,
+        request_queued: Boolean(queueMeta),
+        request_queue_count: queueMeta?.count || 0,
+        first_requested_at: queueMeta?.first_requested_at || null,
+        last_requested_at: queueMeta?.last_requested_at || null
       });
     }
 
-    if (semanticKey) {
-      const semanticCached = await kv.get(semanticKey);
-
-      if (semanticCached) {
-        await kv.set(cacheKey, semanticCached, { ex: EXACT_CACHE_TTL_SECONDS });
-
-        return res.status(200).json({
-          ...semanticCached,
-          cached: true,
-          cache_type: "semantic",
-          response_time_ms: Date.now() - requestStart
-        });
-      }
-    }
+    const historicalReferencesPromise =
+      queryType === "historical"
+        ? fetchHistoricalReferences(normalizedQuery, queryType)
+        : Promise.resolve([]);
 
     const providerStateAndStats = await Promise.all(
       PROVIDERS.map(async (provider) => ({
@@ -1879,8 +2167,15 @@ export default async function handler(req, res) {
     }));
 
     const selectedProviders = chooseProvidersForQuery(queryType, providerConfigs);
-
     const installedProviders = selectedProviders.filter((provider) => provider.enabled);
+
+    if (installedProviders.length === 0) {
+      return res.status(500).json({
+        answer: "No AI providers are configured.",
+        sources: []
+      });
+    }
+
     const allCooling =
       installedProviders.length > 0 &&
       installedProviders.every((provider) => provider.cooling);
@@ -2099,10 +2394,7 @@ export default async function handler(req, res) {
       );
     }
 
-    const historicalReferences = await fetchHistoricalReferences(
-      normalizedQuery,
-      queryType
-    );
+    const historicalReferences = await historicalReferencesPromise;
 
     const result = {
       answer: finalAnswer,
@@ -2116,7 +2408,11 @@ export default async function handler(req, res) {
       consensus_level: critique?.consensus_level || null,
       arbitration_reason: critique?.reason || null,
       outlier_providers: critique?.outliers || [],
-      synthesis_skipped: synthesisSkipped
+      synthesis_skipped: synthesisSkipped,
+      access_tier: accessTier,
+      live_search_used: true,
+      live_search_available: liveSearchAllowed,
+      cache_only_mode: accessTier === ACCESS_TIERS.PUBLIC
     };
 
     if (sources.length > 0) {
