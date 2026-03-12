@@ -12,6 +12,8 @@ const PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
 
 const PROVIDER_STATE_TTL_SECONDS = 24 * 60 * 60;
 const PROVIDER_STATS_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+const METRICS_TTL_SECONDS = 120 * 24 * 60 * 60;
 const PROVIDER_LATENCY_ALPHA = 0.35;
 
 const EXACT_CACHE_TTL_SECONDS = 3600;
@@ -21,14 +23,40 @@ const MAX_PROVIDERS_PER_QUERY = 3;
 const MAX_SOURCE_LINKS = 10;
 const MAX_HISTORICAL_REFERENCES = 8;
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const OPENAI_MODEL =
+  process.env.AI_PROVIDER_OPENAI_MODEL ||
+  process.env.OPENAI_MODEL ||
+  "gpt-4.1-mini";
+
+const GEMINI_MODEL =
+  process.env.AI_PROVIDER_GEMINI_MODEL ||
+  process.env.GEMINI_MODEL ||
+  "gemini-2.5-flash";
+
 const ANTHROPIC_MODEL =
-  process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-latest";
-const PERPLEXITY_MODEL = process.env.PERPLEXITY_MODEL || "sonar-pro";
-const XAI_MODEL = process.env.XAI_MODEL || "grok-3-latest";
-const MISTRAL_MODEL = process.env.MISTRAL_MODEL || "mistral-medium-latest";
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+  process.env.AI_PROVIDER_ANTHROPIC_MODEL ||
+  process.env.ANTHROPIC_MODEL ||
+  "claude-3-5-sonnet-latest";
+
+const PERPLEXITY_MODEL =
+  process.env.AI_PROVIDER_PERPLEXITY_MODEL ||
+  process.env.PERPLEXITY_MODEL ||
+  "sonar-pro";
+
+const XAI_MODEL =
+  process.env.AI_PROVIDER_XAI_MODEL ||
+  process.env.XAI_MODEL ||
+  "grok-3-latest";
+
+const MISTRAL_MODEL =
+  process.env.AI_PROVIDER_MISTRAL_MODEL ||
+  process.env.MISTRAL_MODEL ||
+  "mistral-medium-latest";
+
+const DEEPSEEK_MODEL =
+  process.env.AI_PROVIDER_DEEPSEEK_MODEL ||
+  process.env.DEEPSEEK_MODEL ||
+  "deepseek-chat";
 
 const ALLOWED_ORIGINS = [
   "https://chironnexus.com",
@@ -50,37 +78,37 @@ const PROVIDERS = [
   {
     name: "openai",
     label: "OpenAI Web Search",
-    envKey: "OPENAI_API_KEY"
+    envKeys: ["AI_PROVIDER_OPENAI_KEY", "OPENAI_API_KEY"]
   },
   {
     name: "gemini",
     label: "Gemini",
-    envKey: "GEMINI_API_KEY"
+    envKeys: ["AI_PROVIDER_GEMINI_KEY", "GEMINI_API_KEY"]
   },
   {
     name: "claude",
     label: "Claude",
-    envKey: "ANTHROPIC_API_KEY"
+    envKeys: ["AI_PROVIDER_ANTHROPIC_KEY", "ANTHROPIC_API_KEY"]
   },
   {
     name: "perplexity",
     label: "Perplexity",
-    envKey: "PERPLEXITY_API_KEY"
+    envKeys: ["AI_PROVIDER_PERPLEXITY_KEY", "PERPLEXITY_API_KEY"]
   },
   {
     name: "grok",
     label: "Grok",
-    envKey: "XAI_API_KEY"
+    envKeys: ["AI_PROVIDER_XAI_KEY", "XAI_API_KEY"]
   },
   {
     name: "mistral",
     label: "Mistral",
-    envKey: "MISTRAL_API_KEY"
+    envKeys: ["AI_PROVIDER_MISTRAL_KEY", "MISTRAL_API_KEY"]
   },
   {
     name: "deepseek",
     label: "DeepSeek",
-    envKey: "DEEPSEEK_API_KEY"
+    envKeys: ["AI_PROVIDER_DEEPSEEK_KEY", "DEEPSEEK_API_KEY"]
   }
 ];
 
@@ -88,6 +116,22 @@ function debugLog(...args) {
   if (DEBUG_LOGS) {
     console.error(...args);
   }
+}
+
+function getEnvAny(...keys) {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+function getProviderApiKey(providerName) {
+  const provider = PROVIDERS.find((item) => item.name === providerName);
+  if (!provider) return "";
+  return getEnvAny(...provider.envKeys);
 }
 
 function normalizeQuery(q = "") {
@@ -338,16 +382,50 @@ function getRequestQueueKey(normalizedQuery) {
   return `search:request:v1:${normalizedQuery}`;
 }
 
+function getMetricsKey(metricName, bucket = "global") {
+  return `metrics:v1:${metricName}:${bucket}`;
+}
+
+function getDailyBucket() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function incrementMetric(metricName, bucket = "global", amount = 1) {
+  try {
+    const key = getMetricsKey(metricName, bucket);
+    const value = await kv.incrby(key, amount);
+    if (value === amount) {
+      await kv.expire(key, METRICS_TTL_SECONDS);
+    }
+  } catch (error) {
+    debugLog("Metric increment failed:", metricName, bucket, error?.message || error);
+  }
+}
+
+async function incrementMetricDual(metricName, amount = 1) {
+  await Promise.all([
+    incrementMetric(metricName, "global", amount),
+    incrementMetric(metricName, getDailyBucket(), amount)
+  ]);
+}
+
+async function trackProviderSelection(providerNames = []) {
+  await Promise.all(
+    providerNames.map((providerName) =>
+      Promise.all([
+        incrementMetric("provider_selected", providerName, 1),
+        incrementMetric(`provider_selected_daily:${getDailyBucket()}`, providerName, 1)
+      ])
+    )
+  );
+}
+
 function getLiveAccessMode(req) {
   const explicitAccess = getHeader(req, "x-chiron-access").toLowerCase().trim();
   const adminKeyHeader = getHeader(req, "x-chiron-admin-key");
   const adminKeyEnv = process.env.CHIRON_ADMIN_KEY || "";
 
   if (adminKeyEnv && adminKeyHeader && adminKeyHeader === adminKeyEnv) {
-    return ACCESS_TIERS.ADMIN;
-  }
-
-  if (explicitAccess === ACCESS_TIERS.ADMIN && DEBUG_LOGS) {
     return ACCESS_TIERS.ADMIN;
   }
 
@@ -417,6 +495,7 @@ async function markPublicCacheMissRequest(normalizedQuery) {
     };
 
     await kv.set(key, next, { ex: 7 * 24 * 60 * 60 });
+    await incrementMetricDual("public_cache_miss");
 
     return next;
   } catch (error) {
@@ -499,7 +578,9 @@ async function recordProviderSuccess(providerName, latencyMs) {
     }),
     kv.set(getProviderStatsKey(providerName), nextStats, {
       ex: PROVIDER_STATS_TTL_SECONDS
-    })
+    }),
+    incrementMetricDual("provider_success"),
+    incrementMetric("provider_success_by_name", providerName, 1)
   ]);
 }
 
@@ -547,7 +628,9 @@ async function recordProviderFailure(providerName, latencyMs, errorMessage = "")
     }),
     kv.set(getProviderStatsKey(providerName), nextStats, {
       ex: PROVIDER_STATS_TTL_SECONDS
-    })
+    }),
+    incrementMetricDual("provider_failure"),
+    incrementMetric("provider_failure_by_name", providerName, 1)
   ]);
 }
 
@@ -1292,6 +1375,9 @@ async function fetchHistoricalReferences(query, queryType) {
 }
 
 async function callOpenAI(query) {
+  const apiKey = getProviderApiKey("openai");
+  if (!apiKey) return null;
+
   try {
     const response = await fetchWithAbort(
       "https://api.openai.com/v1/responses",
@@ -1299,7 +1385,7 @@ async function callOpenAI(query) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: OPENAI_MODEL,
@@ -1338,11 +1424,14 @@ async function callOpenAI(query) {
 }
 
 async function callGemini(query) {
+  const apiKey = getProviderApiKey("gemini");
+  if (!apiKey) return null;
+
   try {
     const response = await fetchWithAbort(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
         GEMINI_MODEL
-      )}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      )}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: {
@@ -1379,6 +1468,9 @@ async function callGemini(query) {
 }
 
 async function callClaude(query) {
+  const apiKey = getProviderApiKey("claude");
+  if (!apiKey) return null;
+
   try {
     const response = await fetchWithAbort(
       "https://api.anthropic.com/v1/messages",
@@ -1386,7 +1478,7 @@ async function callClaude(query) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": process.env.ANTHROPIC_API_KEY,
+          "x-api-key": apiKey,
           "anthropic-version": "2023-06-01"
         },
         body: JSON.stringify({
@@ -1425,6 +1517,9 @@ async function callClaude(query) {
 }
 
 async function callPerplexity(query) {
+  const apiKey = getProviderApiKey("perplexity");
+  if (!apiKey) return null;
+
   try {
     const response = await fetchWithAbort(
       "https://api.perplexity.ai/chat/completions",
@@ -1432,7 +1527,7 @@ async function callPerplexity(query) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: PERPLEXITY_MODEL,
@@ -1472,6 +1567,9 @@ async function callPerplexity(query) {
 }
 
 async function callGrok(query) {
+  const apiKey = getProviderApiKey("grok");
+  if (!apiKey) return null;
+
   try {
     const response = await fetchWithAbort(
       "https://api.x.ai/v1/chat/completions",
@@ -1479,7 +1577,7 @@ async function callGrok(query) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.XAI_API_KEY}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: XAI_MODEL,
@@ -1518,6 +1616,9 @@ async function callGrok(query) {
 }
 
 async function callMistral(query) {
+  const apiKey = getProviderApiKey("mistral");
+  if (!apiKey) return null;
+
   try {
     const response = await fetchWithAbort(
       "https://api.mistral.ai/v1/chat/completions",
@@ -1525,7 +1626,7 @@ async function callMistral(query) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: MISTRAL_MODEL,
@@ -1565,6 +1666,9 @@ async function callMistral(query) {
 }
 
 async function callDeepSeek(query) {
+  const apiKey = getProviderApiKey("deepseek");
+  if (!apiKey) return null;
+
   try {
     const response = await fetchWithAbort(
       "https://api.deepseek.com/chat/completions",
@@ -1572,7 +1676,7 @@ async function callDeepSeek(query) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: DEEPSEEK_MODEL,
@@ -1622,6 +1726,11 @@ const PROVIDER_CALLS = {
 };
 
 async function cleanupSingleProviderAnswer(userQuery, providerName, rawAnswer) {
+  const openAiKey = getProviderApiKey("openai");
+  if (!openAiKey) {
+    return rawAnswer || null;
+  }
+
   const cleanupPrompt = `
 You are Chiron Nexus, an AI broker and answer-normalization engine.
 
@@ -1654,7 +1763,7 @@ Your task:
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+          Authorization: `Bearer ${openAiKey}`
         },
         body: JSON.stringify({
           model: OPENAI_MODEL,
@@ -1704,6 +1813,11 @@ function tryParseJson(text = "") {
 }
 
 async function critiqueProviderAnswers(userQuery, providerAnswers, queryType) {
+  const openAiKey = getProviderApiKey("openai");
+  if (!openAiKey) {
+    return null;
+  }
+
   const packet = {
     query: userQuery,
     query_type: queryType,
@@ -1749,7 +1863,7 @@ ${JSON.stringify(packet)}
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+          Authorization: `Bearer ${openAiKey}`
         },
         body: JSON.stringify({
           model: OPENAI_MODEL,
@@ -1813,6 +1927,11 @@ ${JSON.stringify(packet)}
 }
 
 async function synthesizeWithOpenAI(userQuery, providerAnswers, critique = null) {
+  const openAiKey = getProviderApiKey("openai");
+  if (!openAiKey) {
+    return null;
+  }
+
   const sections = providerAnswers
     .filter((item) => item?.answer)
     .map((item) => `${item.label.toUpperCase()} ANSWER:\n${item.answer}`)
@@ -1860,7 +1979,7 @@ Your task:
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+          Authorization: `Bearer ${openAiKey}`
         },
         body: JSON.stringify({
           model: OPENAI_MODEL,
@@ -1900,6 +2019,7 @@ async function callProviderWithTracking(providerName, query, providerFn, delayMs
   const startedAt = Date.now();
 
   try {
+    await incrementMetric("provider_invoked", providerName, 1);
     const result = await providerFn(query);
     const latencyMs = Date.now() - startedAt;
 
@@ -1985,7 +2105,11 @@ export default async function handler(req, res) {
   const liveSearchAllowed = isLiveSearchAllowed(accessTier);
   const forceLive = shouldForceLiveSearch(req, accessTier);
 
+  await incrementMetricDual("request_total");
+  await incrementMetric("request_by_access_tier", accessTier, 1);
+
   if (!isAllowedOrigin(origin)) {
+    await incrementMetricDual("forbidden_origin");
     return res.status(403).json({
       answer: "Forbidden.",
       sources: []
@@ -2024,6 +2148,7 @@ export default async function handler(req, res) {
   }
 
   if (fingerprintCount > maxFingerprintRequestsPerWindow) {
+    await incrementMetricDual("rate_limited_fingerprint");
     return res.status(429).json({
       answer: "Too many requests. Please wait a minute and try again.",
       sources: []
@@ -2041,6 +2166,7 @@ export default async function handler(req, res) {
   }
 
   const queryType = classifyQuery(normalizedQuery);
+  await incrementMetric("request_by_query_type", queryType, 1);
 
   const queryBurstFingerprint = crypto
     .createHash("sha256")
@@ -2059,6 +2185,7 @@ export default async function handler(req, res) {
   }
 
   if (queryBurstCount > maxSameQueryBurst) {
+    await incrementMetricDual("rate_limited_query_burst");
     return res.status(429).json({
       answer: "Please wait before repeating the same search.",
       sources: []
@@ -2077,19 +2204,20 @@ export default async function handler(req, res) {
   }
 
   if (currentCount > maxRequestsPerWindow) {
+    await incrementMetricDual("rate_limited_ip");
     return res.status(429).json({
       answer: "Too many searches. Please wait a minute and try again.",
       sources: []
     });
   }
 
-  const cacheKey = `search:v23:${normalizedQuery}`;
+  const cacheKey = `search:v24:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
     : "";
   const semanticKey = semanticFingerprint
-    ? `semantic:v9:${semanticFingerprint}`
+    ? `semantic:v10:${semanticFingerprint}`
     : "";
 
   try {
@@ -2097,6 +2225,7 @@ export default async function handler(req, res) {
       const cached = await kv.get(cacheKey);
 
       if (cached) {
+        await incrementMetricDual("cache_hit_exact");
         return res.status(200).json({
           ...cached,
           cached: true,
@@ -2114,6 +2243,7 @@ export default async function handler(req, res) {
 
         if (semanticCached) {
           await kv.set(cacheKey, semanticCached, { ex: EXACT_CACHE_TTL_SECONDS });
+          await incrementMetricDual("cache_hit_semantic");
 
           return res.status(200).json({
             ...semanticCached,
@@ -2128,6 +2258,8 @@ export default async function handler(req, res) {
         }
       }
     }
+
+    await incrementMetricDual("cache_miss");
 
     if (!liveSearchAllowed) {
       const queueMeta = await markPublicCacheMissRequest(normalizedQuery);
@@ -2146,6 +2278,8 @@ export default async function handler(req, res) {
       });
     }
 
+    await incrementMetricDual("live_search_used");
+
     const historicalReferencesPromise =
       queryType === "historical"
         ? fetchHistoricalReferences(normalizedQuery, queryType)
@@ -2161,7 +2295,7 @@ export default async function handler(req, res) {
 
     const providerConfigs = providerStateAndStats.map((provider) => ({
       ...provider,
-      enabled: Boolean(process.env[provider.envKey]),
+      enabled: Boolean(getEnvAny(...provider.envKeys)),
       cooling: isProviderCoolingDown(provider.state),
       available: false
     }));
@@ -2170,11 +2304,14 @@ export default async function handler(req, res) {
     const installedProviders = selectedProviders.filter((provider) => provider.enabled);
 
     if (installedProviders.length === 0) {
+      await incrementMetricDual("no_provider_configured");
       return res.status(500).json({
         answer: "No AI providers are configured.",
         sources: []
       });
     }
+
+    await trackProviderSelection(installedProviders.map((item) => item.name));
 
     const allCooling =
       installedProviders.length > 0 &&
@@ -2379,6 +2516,7 @@ export default async function handler(req, res) {
     }
 
     if (!finalAnswer) {
+      await incrementMetricDual("answer_generation_failed");
       return res.status(500).json({
         answer: "AI providers failed to return a usable answer.",
         sources: []
@@ -2423,6 +2561,8 @@ export default async function handler(req, res) {
       }
     }
 
+    await incrementMetricDual("answer_generated");
+
     return res.status(200).json({
       ...result,
       cached: false,
@@ -2431,6 +2571,7 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error("Chiron Engine fatal error:", error);
+    await incrementMetricDual("fatal_error");
 
     return res.status(500).json({
       answer: "Error contacting AI services.",
