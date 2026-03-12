@@ -24,6 +24,44 @@ const ALLOWED_ORIGINS = [
   "http://localhost:3000"
 ];
 
+const PROVIDERS = [
+  {
+    name: "openai",
+    label: "OpenAI Web Search",
+    envKey: "OPENAI_API_KEY"
+  },
+  {
+    name: "gemini",
+    label: "Gemini",
+    envKey: "GEMINI_API_KEY"
+  },
+  {
+    name: "claude",
+    label: "Claude",
+    envKey: "ANTHROPIC_API_KEY"
+  },
+  {
+    name: "perplexity",
+    label: "Perplexity",
+    envKey: "PERPLEXITY_API_KEY"
+  },
+  {
+    name: "grok",
+    label: "Grok",
+    envKey: "XAI_API_KEY"
+  },
+  {
+    name: "mistral",
+    label: "Mistral",
+    envKey: "MISTRAL_API_KEY"
+  },
+  {
+    name: "deepseek",
+    label: "DeepSeek",
+    envKey: "DEEPSEEK_API_KEY"
+  }
+];
+
 function debugLog(...args) {
   if (DEBUG_LOGS) {
     console.error(...args);
@@ -51,10 +89,7 @@ function getClientIp(req) {
 }
 
 function tokenize(text = "") {
-  return text
-    .toLowerCase()
-    .split(/\W+/)
-    .filter(Boolean);
+  return text.toLowerCase().split(/\W+/).filter(Boolean);
 }
 
 function calculateSimilarity(a = "", b = "") {
@@ -74,58 +109,6 @@ function calculateSimilarity(a = "", b = "") {
   });
 
   return overlap / Math.max(wordsA.size, wordsB.size);
-}
-
-function providersDisagree(a, b) {
-  if (!a || !b) return false;
-
-  const lengthDiff = Math.abs(a.length - b.length);
-  if (lengthDiff > 500) {
-    return true;
-  }
-
-  const similarity = calculateSimilarity(a, b);
-  return similarity < 0.35;
-}
-
-function getConfidence(openaiAnswer, geminiAnswer, disagreement) {
-  if (!openaiAnswer || !geminiAnswer) {
-    return "low";
-  }
-
-  if (disagreement) {
-    return "low";
-  }
-
-  const lengthDiff = Math.abs(openaiAnswer.length - geminiAnswer.length);
-  const similarity = calculateSimilarity(openaiAnswer, geminiAnswer);
-
-  if (similarity >= 0.65 && lengthDiff < 250) {
-    return "high";
-  }
-
-  return "medium";
-}
-
-function shouldSkipSynthesis(openaiAnswer, geminiAnswer, disagreement) {
-  if (!openaiAnswer || !geminiAnswer || disagreement) {
-    return false;
-  }
-
-  const similarity = calculateSimilarity(openaiAnswer, geminiAnswer);
-  const lengthDiff = Math.abs(openaiAnswer.length - geminiAnswer.length);
-
-  return similarity >= 0.82 && lengthDiff < 180;
-}
-
-function pickBestDirectAnswer(openaiAnswer, geminiAnswer) {
-  const openaiLength = openaiAnswer?.length || 0;
-  const geminiLength = geminiAnswer?.length || 0;
-
-  if (openaiLength === 0) return geminiAnswer || null;
-  if (geminiLength === 0) return openaiAnswer || null;
-
-  return openaiLength >= geminiLength ? openaiAnswer : geminiAnswer;
 }
 
 function fingerprintQuery(q = "") {
@@ -297,9 +280,8 @@ async function recordProviderSuccess(providerName, latencyMs) {
     last_success_at: Date.now()
   };
 
-  const previousAvg = typeof stats.avg_latency_ms === "number"
-    ? stats.avg_latency_ms
-    : latencyMs;
+  const previousAvg =
+    typeof stats.avg_latency_ms === "number" ? stats.avg_latency_ms : latencyMs;
 
   const nextAvg =
     previousAvg + (latencyMs - previousAvg) * PROVIDER_LATENCY_ALPHA;
@@ -379,35 +361,39 @@ async function recordProviderFailure(providerName, latencyMs, errorMessage = "")
   ]);
 }
 
-function choosePreferredProvider(openaiStats, geminiStats, openaiAvailable, geminiAvailable) {
-  if (openaiAvailable && !geminiAvailable) {
-    return "openai";
+function chooseProviderDelays(providerConfigs) {
+  const available = providerConfigs.filter((p) => p.available);
+
+  if (available.length <= 1) {
+    return Object.fromEntries(providerConfigs.map((p) => [p.name, 0]));
   }
 
-  if (geminiAvailable && !openaiAvailable) {
-    return "gemini";
-  }
+  const ranked = [...available].sort((a, b) => {
+    const aLatency =
+      typeof a.stats?.avg_latency_ms === "number"
+        ? a.stats.avg_latency_ms
+        : Number.MAX_SAFE_INTEGER;
+    const bLatency =
+      typeof b.stats?.avg_latency_ms === "number"
+        ? b.stats.avg_latency_ms
+        : Number.MAX_SAFE_INTEGER;
 
-  if (!openaiAvailable && !geminiAvailable) {
-    return null;
-  }
+    return aLatency - bLatency;
+  });
 
-  const openaiLatency = openaiStats?.avg_latency_ms;
-  const geminiLatency = geminiStats?.avg_latency_ms;
+  const delays = {};
 
-  if (typeof openaiLatency !== "number" || typeof geminiLatency !== "number") {
-    return null;
-  }
+  ranked.forEach((provider, index) => {
+    delays[provider.name] = index === 0 ? 0 : PROVIDER_SECONDARY_DELAY_MS;
+  });
 
-  if (openaiLatency <= geminiLatency * 0.75) {
-    return "openai";
-  }
+  providerConfigs.forEach((provider) => {
+    if (!(provider.name in delays)) {
+      delays[provider.name] = 0;
+    }
+  });
 
-  if (geminiLatency <= openaiLatency * 0.75) {
-    return "gemini";
-  }
-
-  return null;
+  return delays;
 }
 
 function sleep(ms) {
@@ -434,6 +420,20 @@ async function fetchWithAbort(url, options, ms, label = "Request") {
   }
 }
 
+function dedupeSourceLinks(links = []) {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const link of links) {
+    const key = `${link?.url || ""}|${link?.title || ""}`;
+    if (!link?.url || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(link);
+  }
+
+  return deduped.slice(0, 10);
+}
+
 function extractOutputTextParts(data) {
   const output = Array.isArray(data?.output) ? data.output : [];
   const parts = [];
@@ -451,20 +451,6 @@ function extractOutputTextParts(data) {
   return parts;
 }
 
-function dedupeSourceLinks(links = []) {
-  const seen = new Set();
-  const deduped = [];
-
-  for (const link of links) {
-    const key = `${link.url}|${link.title}`;
-    if (!link.url || seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(link);
-  }
-
-  return deduped.slice(0, 8);
-}
-
 function extractOpenAISourceLinks(data) {
   const parts = extractOutputTextParts(data);
   const links = [];
@@ -477,10 +463,7 @@ function extractOpenAISourceLinks(data) {
 
       const url = annotation.url || annotation.uri || "";
       const title =
-        annotation.title ||
-        annotation.text ||
-        annotation.display_text ||
-        url;
+        annotation.title || annotation.text || annotation.display_text || url;
 
       if (!url) continue;
 
@@ -495,27 +478,81 @@ function extractOpenAISourceLinks(data) {
   return dedupeSourceLinks(links);
 }
 
+function extractPerplexitySourceLinks(data) {
+  const searchResults = Array.isArray(data?.search_results)
+    ? data.search_results
+    : [];
+
+  return dedupeSourceLinks(
+    searchResults.map((item) => ({
+      title: String(item?.title || item?.url || "Perplexity result").slice(0, 300),
+      url: String(item?.url || "").slice(0, 1000),
+      provider: "Perplexity"
+    }))
+  );
+}
+
+function extractPerplexityReferenceImage(data) {
+  const images = Array.isArray(data?.images) ? data.images : [];
+  const first = images[0];
+
+  if (!first?.image_url) {
+    return null;
+  }
+
+  return {
+    url: first.image_url,
+    title: first.title || "Perplexity image",
+    caption: first.title || "Reference image",
+    source_url: first.origin_url || "",
+    provider: "Perplexity"
+  };
+}
+
+function extractChatMessageContent(data) {
+  const content = data?.choices?.[0]?.message?.content;
+
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item?.type === "text") return item.text || "";
+        return "";
+      })
+      .join("")
+      .trim();
+  }
+
+  return null;
+}
+
 function isVisualQuery(query = "") {
   const q = query.toLowerCase();
 
-  return [
-    "what does ",
-    "what does a ",
-    "what does an ",
-    "what does the ",
-    "look like",
-    "show me ",
-    "image of ",
-    "picture of ",
-    "photo of ",
-    "what is a ",
-    "what is an "
-  ].some((pattern) => q.includes(pattern)) &&
+  return (
+    [
+      "what does ",
+      "what does a ",
+      "what does an ",
+      "what does the ",
+      "look like",
+      "show me ",
+      "image of ",
+      "picture of ",
+      "photo of ",
+      "what is a ",
+      "what is an "
+    ].some((pattern) => q.includes(pattern)) &&
     (q.includes("look like") ||
       q.startsWith("show me ") ||
       q.startsWith("image of ") ||
       q.startsWith("picture of ") ||
-      q.startsWith("photo of "));
+      q.startsWith("photo of "))
+  );
 }
 
 function extractVisualSubject(query = "") {
@@ -532,9 +569,7 @@ function extractVisualSubject(query = "") {
     .replace(/[?!.]+$/g, "")
     .trim();
 
-  q = q
-    .replace(/^(a|an|the)\s+/, "")
-    .trim();
+  q = q.replace(/^(a|an|the)\s+/, "").trim();
 
   return q.slice(0, 120);
 }
@@ -556,7 +591,7 @@ async function fetchWikipediaReferenceImage(subject) {
       {
         method: "GET",
         headers: {
-          "Accept": "application/json"
+          Accept: "application/json"
         }
       },
       3500,
@@ -568,10 +603,7 @@ async function fetchWikipediaReferenceImage(subject) {
     }
 
     const data = await response.json();
-    const imageUrl =
-      data?.thumbnail?.source ||
-      data?.originalimage?.source ||
-      null;
+    const imageUrl = data?.thumbnail?.source || data?.originalimage?.source || null;
 
     if (!imageUrl) {
       return null;
@@ -581,13 +613,173 @@ async function fetchWikipediaReferenceImage(subject) {
       url: imageUrl,
       title: data?.title || subject,
       caption: data?.description || `Reference image for ${subject}`,
-      source_url: data?.content_urls?.desktop?.page || data?.content_urls?.mobile?.page || "",
+      source_url:
+        data?.content_urls?.desktop?.page ||
+        data?.content_urls?.mobile?.page ||
+        "",
       provider: "Wikipedia"
     };
   } catch (error) {
     debugLog("Wikipedia image lookup failed:", error?.message || error);
     return null;
   }
+}
+
+function countUncertaintySignals(text = "") {
+  const patterns = [
+    "may",
+    "might",
+    "could",
+    "possibly",
+    "likely",
+    "appears",
+    "seems",
+    "unclear",
+    "uncertain",
+    "not clear",
+    "not confirmed",
+    "probably"
+  ];
+
+  const lower = text.toLowerCase();
+  let count = 0;
+
+  for (const pattern of patterns) {
+    if (lower.includes(pattern)) {
+      count++;
+    }
+  }
+
+  return count;
+}
+
+function computeQueryTermOverlap(query = "", answer = "") {
+  const queryTerms = new Set(
+    fingerprintQuery(query)
+      .split(/\s+/)
+      .filter(Boolean)
+  );
+
+  if (queryTerms.size === 0) {
+    return 0;
+  }
+
+  const answerTerms = new Set(tokenize(answer));
+  let overlap = 0;
+
+  queryTerms.forEach((term) => {
+    if (answerTerms.has(term)) {
+      overlap++;
+    }
+  });
+
+  return overlap / queryTerms.size;
+}
+
+function classifyQuery(query = "") {
+  const q = query.toLowerCase();
+
+  const freshPatterns = [
+    "latest",
+    "today",
+    "current",
+    "currently",
+    "now",
+    "news",
+    "recent",
+    "tonight",
+    "tomorrow",
+    "yesterday",
+    "this week",
+    "this month",
+    "this year"
+  ];
+
+  if (freshPatterns.some((pattern) => q.includes(pattern))) {
+    return "fresh";
+  }
+
+  if (
+    q.includes("compare") ||
+    q.includes(" vs ") ||
+    q.includes(" versus ") ||
+    q.startsWith("difference between")
+  ) {
+    return "comparison";
+  }
+
+  if (isVisualQuery(q)) {
+    return "visual";
+  }
+
+  if (
+    q.startsWith("why ") ||
+    q.startsWith("how ") ||
+    q.includes("explain") ||
+    q.includes("overview") ||
+    q.includes("summary")
+  ) {
+    return "explanation";
+  }
+
+  if (
+    q.startsWith("what is ") ||
+    q.startsWith("who is ") ||
+    q.startsWith("when did ") ||
+    q.startsWith("where is ") ||
+    q.startsWith("capital of ")
+  ) {
+    return "factual";
+  }
+
+  return "general";
+}
+
+function scoreAnswer({ answer, sourceLinks = [], query, queryType }) {
+  if (!answer) {
+    return -999;
+  }
+
+  const length = answer.length;
+  const overlap = computeQueryTermOverlap(query, answer);
+  const uncertaintySignals = countUncertaintySignals(answer);
+  const hasSources = sourceLinks.length > 0;
+
+  let score = 0;
+
+  score += overlap * 40;
+
+  if (hasSources) {
+    score += Math.min(sourceLinks.length, 4) * 8;
+  }
+
+  if (length >= 120 && length <= 1400) {
+    score += 14;
+  } else if (length >= 60 && length <= 1800) {
+    score += 8;
+  } else {
+    score -= 6;
+  }
+
+  if (uncertaintySignals >= 4) {
+    score -= 10;
+  } else if (uncertaintySignals >= 2) {
+    score -= 4;
+  }
+
+  if (answer.includes("\n\n")) {
+    score += 3;
+  }
+
+  if (queryType === "fresh" && !hasSources) {
+    score -= 10;
+  }
+
+  if (queryType === "comparison" && length < 180) {
+    score -= 6;
+  }
+
+  return Math.round(score);
 }
 
 async function callOpenAI(query) {
@@ -598,7 +790,7 @@ async function callOpenAI(query) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
           model: "gpt-4.1-mini",
@@ -617,9 +809,7 @@ async function callOpenAI(query) {
       return null;
     }
 
-    const messageItem = (data.output || []).find(
-      (item) => item.type === "message"
-    );
+    const messageItem = (data.output || []).find((item) => item.type === "message");
 
     const answer =
       data.output_text ||
@@ -629,7 +819,8 @@ async function callOpenAI(query) {
 
     return {
       answer,
-      source_links: extractOpenAISourceLinks(data)
+      source_links: extractOpenAISourceLinks(data),
+      reference_image: null
     };
   } catch (error) {
     console.error("OpenAI request error:", error);
@@ -668,7 +859,8 @@ async function callGemini(query) {
 
     return {
       answer: data.candidates?.[0]?.content?.parts?.[0]?.text || null,
-      source_links: []
+      source_links: [],
+      reference_image: null
     };
   } catch (error) {
     console.error("Gemini request error:", error);
@@ -676,78 +868,248 @@ async function callGemini(query) {
   }
 }
 
-async function synthesizeWithOpenAI(userQuery, openaiAnswer, geminiAnswer, disagreement) {
-  const synthesisPrompt = `
-You are Chiron Nexus, an AI broker and synthesis engine.
-
-The user asked:
-"${userQuery}"
-
-Below are two AI-generated answers from different providers.
-
-OPENAI ANSWER:
-${openaiAnswer}
-
-GEMINI ANSWER:
-${geminiAnswer}
-
-Important:
-- The two providers ${disagreement ? "appear to disagree in meaningful ways" : "mostly agree"}.
-- ${disagreement
-    ? "Be cautious, acknowledge uncertainty where needed, and reconcile differences carefully."
-    : "Produce a clean merged answer using the strongest parts of both."}
-
-Your task:
-- Produce one clear, accurate, concise final answer for the user.
-- Synthesize the strongest points from both answers.
-- Resolve disagreements cautiously.
-- Do not mention internal analysis.
-- Do not say "OpenAI says" or "Gemini says" in the main answer.
-- Do not use markdown headings.
-- Keep the answer clean and natural.
-- If both answers are weak or uncertain, say so briefly and give the best cautious answer.
-`;
-
+async function callClaude(query) {
   try {
     const response = await fetchWithAbort(
-      "https://api.openai.com/v1/responses",
+      "https://api.anthropic.com/v1/messages",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+          "x-api-key": process.env.ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01"
         },
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
-          input: synthesisPrompt
+          model: "claude-sonnet-4-6",
+          max_tokens: 900,
+          messages: [
+            {
+              role: "user",
+              content: query
+            }
+          ]
         })
       },
-      6000,
-      "Synthesis"
+      8000,
+      "Claude"
     );
 
     const data = await response.json();
-    debugLog("Synthesis raw response:", JSON.stringify(data, null, 2));
+    debugLog("Claude raw response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return null;
     }
 
-    const messageItem = (data.output || []).find(
-      (item) => item.type === "message"
-    );
+    const answer = data?.content?.find((part) => part.type === "text")?.text || null;
 
-    return (
-      data.output_text ||
-      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
-      messageItem?.content?.[0]?.text ||
-      null
-    );
+    return {
+      answer,
+      source_links: [],
+      reference_image: null
+    };
   } catch (error) {
-    console.error("Synthesis request error:", error);
+    console.error("Claude request error:", error);
     return null;
   }
 }
+
+async function callPerplexity(query) {
+  try {
+    const response = await fetchWithAbort(
+      "https://api.perplexity.ai/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "sonar-pro",
+          messages: [
+            {
+              role: "system",
+              content:
+                "Answer clearly and concisely. Use current web-grounded information when relevant."
+            },
+            {
+              role: "user",
+              content: query
+            }
+          ]
+        })
+      },
+      9000,
+      "Perplexity"
+    );
+
+    const data = await response.json();
+    debugLog("Perplexity raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return {
+      answer: extractChatMessageContent(data),
+      source_links: extractPerplexitySourceLinks(data),
+      reference_image: extractPerplexityReferenceImage(data)
+    };
+  } catch (error) {
+    console.error("Perplexity request error:", error);
+    return null;
+  }
+}
+
+async function callGrok(query) {
+  try {
+    const response = await fetchWithAbort(
+      "https://api.x.ai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.XAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "grok-3-latest",
+          messages: [
+            {
+              role: "system",
+              content: "Answer clearly and concisely."
+            },
+            {
+              role: "user",
+              content: query
+            }
+          ]
+        })
+      },
+      9000,
+      "Grok"
+    );
+
+    const data = await response.json();
+    debugLog("Grok raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return {
+      answer: extractChatMessageContent(data),
+      source_links: [],
+      reference_image: null
+    };
+  } catch (error) {
+    console.error("Grok request error:", error);
+    return null;
+  }
+}
+
+async function callMistral(query) {
+  try {
+    const response = await fetchWithAbort(
+      "https://api.mistral.ai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "mistral-medium-latest",
+          messages: [
+            {
+              role: "system",
+              content: "Answer clearly and concisely."
+            },
+            {
+              role: "user",
+              content: query
+            }
+          ],
+          max_tokens: 900
+        })
+      },
+      9000,
+      "Mistral"
+    );
+
+    const data = await response.json();
+    debugLog("Mistral raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return {
+      answer: extractChatMessageContent(data),
+      source_links: [],
+      reference_image: null
+    };
+  } catch (error) {
+    console.error("Mistral request error:", error);
+    return null;
+  }
+}
+
+async function callDeepSeek(query) {
+  try {
+    const response = await fetchWithAbort(
+      "https://api.deepseek.com/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            {
+              role: "system",
+              content: "Answer clearly and concisely."
+            },
+            {
+              role: "user",
+              content: query
+            }
+          ],
+          max_tokens: 900
+        })
+      },
+      9000,
+      "DeepSeek"
+    );
+
+    const data = await response.json();
+    debugLog("DeepSeek raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return {
+      answer: extractChatMessageContent(data),
+      source_links: [],
+      reference_image: null
+    };
+  } catch (error) {
+    console.error("DeepSeek request error:", error);
+    return null;
+  }
+}
+
+const PROVIDER_CALLS = {
+  openai: callOpenAI,
+  gemini: callGemini,
+  claude: callClaude,
+  perplexity: callPerplexity,
+  grok: callGrok,
+  mistral: callMistral,
+  deepseek: callDeepSeek
+};
 
 async function cleanupSingleProviderAnswer(userQuery, providerName, rawAnswer) {
   const cleanupPrompt = `
@@ -782,7 +1144,7 @@ Your task:
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
           model: "gpt-4.1-mini",
@@ -800,9 +1162,7 @@ Your task:
       return null;
     }
 
-    const messageItem = (data.output || []).find(
-      (item) => item.type === "message"
-    );
+    const messageItem = (data.output || []).find((item) => item.type === "message");
 
     return (
       data.output_text ||
@@ -812,6 +1172,212 @@ Your task:
     );
   } catch (error) {
     console.error("Cleanup request error:", error);
+    return null;
+  }
+}
+
+function tryParseJson(text = "") {
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+async function critiqueProviderAnswers(userQuery, providerAnswers, queryType) {
+  const packet = {
+    query: userQuery,
+    query_type: queryType,
+    providers: providerAnswers.map((item) => ({
+      provider: item.provider,
+      label: item.label,
+      score: item.score,
+      sources: item.source_links?.length || 0,
+      answer: item.answer
+    }))
+  };
+
+  const critiquePrompt = `
+You are the arbitration engine for Chiron Nexus.
+
+Analyze the candidate AI answers below and return JSON only.
+
+Return this exact shape:
+{
+  "consensus_level": "high" | "medium" | "low",
+  "needs_synthesis": true | false,
+  "winner": string | null,
+  "outliers": string[],
+  "confidence": "high" | "medium" | "low",
+  "reason": string
+}
+
+Rules:
+- "winner" should be the provider id when one answer is clearly strongest.
+- "needs_synthesis" should be true when combining multiple answers will produce a better final result.
+- Use "outliers" for materially weaker or conflicting answers.
+- Keep "reason" under 220 characters.
+- Return valid JSON only. No markdown.
+
+Candidate packet:
+${JSON.stringify(packet)}
+`;
+
+  try {
+    const response = await fetchWithAbort(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini",
+          input: critiquePrompt
+        })
+      },
+      6000,
+      "Critique"
+    );
+
+    const data = await response.json();
+    debugLog("Critique raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const messageItem = (data.output || []).find((item) => item.type === "message");
+    const text =
+      data.output_text ||
+      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
+      messageItem?.content?.[0]?.text ||
+      "";
+
+    const parsed = tryParseJson(text);
+
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return {
+      consensus_level:
+        parsed.consensus_level === "high" ||
+        parsed.consensus_level === "medium" ||
+        parsed.consensus_level === "low"
+          ? parsed.consensus_level
+          : "medium",
+      needs_synthesis: Boolean(parsed.needs_synthesis),
+      winner:
+        typeof parsed.winner === "string" && parsed.winner.length > 0
+          ? parsed.winner
+          : null,
+      outliers: Array.isArray(parsed.outliers)
+        ? parsed.outliers.filter((item) => typeof item === "string").slice(0, 4)
+        : [],
+      confidence:
+        parsed.confidence === "high" ||
+        parsed.confidence === "medium" ||
+        parsed.confidence === "low"
+          ? parsed.confidence
+          : "medium",
+      reason:
+        typeof parsed.reason === "string"
+          ? parsed.reason.slice(0, 220)
+          : "Arbitration completed."
+    };
+  } catch (error) {
+    console.error("Critique request error:", error);
+    return null;
+  }
+}
+
+async function synthesizeWithOpenAI(userQuery, providerAnswers, critique = null) {
+  const sections = providerAnswers
+    .filter((item) => item?.answer)
+    .map((item) => `${item.label.toUpperCase()} ANSWER:\n${item.answer}`)
+    .join("\n\n");
+
+  const critiqueSection = critique
+    ? `
+Arbitration summary:
+- Consensus level: ${critique.consensus_level}
+- Suggested winner: ${critique.winner || "none"}
+- Outliers: ${(critique.outliers || []).join(", ") || "none"}
+- Confidence: ${critique.confidence}
+- Reason: ${critique.reason}
+`
+    : "";
+
+  const synthesisPrompt = `
+You are Chiron Nexus, an AI broker and synthesis engine.
+
+The user asked:
+"${userQuery}"
+
+${critiqueSection}
+
+Below are AI-generated answers from different providers.
+
+${sections}
+
+Your task:
+- Produce one clear, accurate, concise final answer for the user.
+- Synthesize the strongest points from the provider answers.
+- Resolve disagreements cautiously.
+- If one answer appears weak or uncertain, do not over-trust it.
+- Do not mention internal analysis.
+- Do not say provider names in the final answer.
+- Do not use markdown headings.
+- Keep the answer clean and natural.
+- If the answers conflict, be cautious and briefly acknowledge uncertainty when needed.
+`;
+
+  try {
+    const response = await fetchWithAbort(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini",
+          input: synthesisPrompt
+        })
+      },
+      7000,
+      "Synthesis"
+    );
+
+    const data = await response.json();
+    debugLog("Synthesis raw response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const messageItem = (data.output || []).find((item) => item.type === "message");
+
+    return (
+      data.output_text ||
+      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
+      messageItem?.content?.[0]?.text ||
+      null
+    );
+  } catch (error) {
+    console.error("Synthesis request error:", error);
     return null;
   }
 }
@@ -833,6 +1399,7 @@ async function callProviderWithTracking(providerName, query, providerFn, delayMs
         name: providerName,
         answer: result.answer,
         source_links: Array.isArray(result.source_links) ? result.source_links : [],
+        reference_image: result.reference_image || null,
         error: null,
         latency_ms: latencyMs,
         skipped: false
@@ -849,6 +1416,7 @@ async function callProviderWithTracking(providerName, query, providerFn, delayMs
       name: providerName,
       answer: null,
       source_links: [],
+      reference_image: null,
       error: new Error("No usable answer returned"),
       latency_ms: latencyMs,
       skipped: false
@@ -866,6 +1434,7 @@ async function callProviderWithTracking(providerName, query, providerFn, delayMs
       name: providerName,
       answer: null,
       source_links: [],
+      reference_image: null,
       error,
       latency_ms: latencyMs,
       skipped: false
@@ -958,6 +1527,8 @@ export default async function handler(req, res) {
     });
   }
 
+  const queryType = classifyQuery(normalizedQuery);
+
   const queryBurstFingerprint = crypto
     .createHash("sha256")
     .update(`${fingerprint}|${normalizedQuery}`)
@@ -999,13 +1570,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v15:${normalizedQuery}`;
+  const cacheKey = `search:v19:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
     : "";
   const semanticKey = semanticFingerprint
-    ? `semantic:v2:${semanticFingerprint}`
+    ? `semantic:v5:${semanticFingerprint}`
     : "";
 
   try {
@@ -1035,217 +1606,216 @@ export default async function handler(req, res) {
       }
     }
 
-    const [
-      openaiState,
-      geminiState,
-      openaiStats,
-      geminiStats
-    ] = await Promise.all([
-      getProviderState("openai"),
-      getProviderState("gemini"),
-      getProviderStats("openai"),
-      getProviderStats("gemini")
-    ]);
-
-    const openaiCooling = isProviderCoolingDown(openaiState);
-    const geminiCooling = isProviderCoolingDown(geminiState);
-
-    const bypassCooldowns = openaiCooling && geminiCooling;
-
-    const openaiAvailable = bypassCooldowns || !openaiCooling;
-    const geminiAvailable = bypassCooldowns || !geminiCooling;
-
-    const preferredProvider = choosePreferredProvider(
-      openaiStats,
-      geminiStats,
-      openaiAvailable,
-      geminiAvailable
+    const providerStateAndStats = await Promise.all(
+      PROVIDERS.map(async (provider) => ({
+        ...provider,
+        state: await getProviderState(provider.name),
+        stats: await getProviderStats(provider.name)
+      }))
     );
 
-    const openaiDelay =
-      preferredProvider === "gemini" ? PROVIDER_SECONDARY_DELAY_MS : 0;
+    const providerConfigs = providerStateAndStats.map((provider) => ({
+      ...provider,
+      enabled: Boolean(process.env[provider.envKey]),
+      cooling: isProviderCoolingDown(provider.state)
+    }));
 
-    const geminiDelay =
-      preferredProvider === "openai" ? PROVIDER_SECONDARY_DELAY_MS : 0;
+    const installedProviders = providerConfigs.filter((provider) => provider.enabled);
+    const allCooling =
+      installedProviders.length > 0 &&
+      installedProviders.every((provider) => provider.cooling);
 
-    let openaiTask = null;
-    let geminiTask = null;
+    installedProviders.forEach((provider) => {
+      provider.available = allCooling || !provider.cooling;
+    });
 
-    if (openaiAvailable) {
-      openaiTask = callProviderWithTracking(
-        "openai",
-        normalizedQuery,
-        callOpenAI,
-        openaiDelay
-      );
-    }
+    const delays = chooseProviderDelays(installedProviders);
 
-    if (geminiAvailable) {
-      geminiTask = callProviderWithTracking(
-        "gemini",
-        normalizedQuery,
-        callGemini,
-        geminiDelay
-      );
-    }
+    const providerTasks = {};
+    const providerResults = {};
 
-    let openaiResult = openaiAvailable
-      ? null
-      : {
-          name: "openai",
-          answer: null,
-          source_links: [],
-          error: new Error("Provider cooling down"),
-          latency_ms: null,
-          skipped: true
-        };
-
-    let geminiResult = geminiAvailable
-      ? null
-      : {
-          name: "gemini",
-          answer: null,
-          source_links: [],
-          error: new Error("Provider cooling down"),
-          latency_ms: null,
-          skipped: true
-        };
-
-    if (openaiTask && geminiTask) {
-      const firstSettled = await Promise.race([
-        openaiTask.then((result) => ({ ...result, settledBy: "openai" })),
-        geminiTask.then((result) => ({ ...result, settledBy: "gemini" }))
-      ]);
-
-      const otherTask =
-        firstSettled.settledBy === "openai" ? geminiTask : openaiTask;
-
-      if (firstSettled.settledBy === "openai") {
-        openaiResult = firstSettled;
+    for (const provider of installedProviders) {
+      if (provider.available) {
+        providerTasks[provider.name] = callProviderWithTracking(
+          provider.name,
+          normalizedQuery,
+          PROVIDER_CALLS[provider.name],
+          delays[provider.name] || 0
+        );
       } else {
-        geminiResult = firstSettled;
+        providerResults[provider.name] = {
+          name: provider.name,
+          answer: null,
+          source_links: [],
+          reference_image: null,
+          error: new Error("Provider cooling down"),
+          latency_ms: null,
+          skipped: true
+        };
       }
+    }
+
+    const activeTaskEntries = Object.entries(providerTasks);
+
+    if (activeTaskEntries.length > 0) {
+      const firstSettled = await Promise.race(
+        activeTaskEntries.map(([name, task]) =>
+          task.then((result) => ({ ...result, settledBy: name }))
+        )
+      );
+
+      providerResults[firstSettled.name] = firstSettled;
 
       if (firstSettled.error) {
-        console.error(
-          `${firstSettled.name} provider error:`,
-          firstSettled.error
-        );
+        console.error(`${firstSettled.name} provider error:`, firstSettled.error);
       }
 
-      if (firstSettled.answer) {
-        const otherResult = await waitWithTimeout(
-          otherTask,
-          PROVIDER_RACE_GRACE_MS
+      const remainingTasks = activeTaskEntries.filter(
+        ([name]) => name !== firstSettled.name
+      );
+
+      if (firstSettled.answer && remainingTasks.length > 0) {
+        const remainingResults = await Promise.all(
+          remainingTasks.map(async ([name, task]) => {
+            const result = await waitWithTimeout(task, PROVIDER_RACE_GRACE_MS);
+            return result
+              ? result
+              : {
+                  name,
+                  answer: null,
+                  source_links: [],
+                  reference_image: null,
+                  error: null,
+                  latency_ms: null,
+                  skipped: true
+                };
+          })
         );
 
-        if (otherResult) {
-          if (otherResult.name === "openai") {
-            openaiResult = otherResult;
-          } else {
-            geminiResult = otherResult;
-          }
+        for (const result of remainingResults) {
+          providerResults[result.name] = result;
 
-          if (otherResult.error) {
-            console.error(
-              `${otherResult.name} provider error:`,
-              otherResult.error
-            );
+          if (result?.error) {
+            console.error(`${result.name} provider error:`, result.error);
           }
         }
       } else {
-        const otherResult = await otherTask;
+        const remainingResults = await Promise.all(
+          remainingTasks.map(async ([, task]) => task)
+        );
 
-        if (otherResult.name === "openai") {
-          openaiResult = otherResult;
-        } else {
-          geminiResult = otherResult;
+        for (const result of remainingResults) {
+          providerResults[result.name] = result;
+
+          if (result?.error) {
+            console.error(`${result.name} provider error:`, result.error);
+          }
         }
-
-        if (otherResult.error) {
-          console.error(
-            `${otherResult.name} provider error:`,
-            otherResult.error
-          );
-        }
-      }
-    } else if (openaiTask) {
-      openaiResult = await openaiTask;
-
-      if (openaiResult.error) {
-        console.error("openai provider error:", openaiResult.error);
-      }
-    } else if (geminiTask) {
-      geminiResult = await geminiTask;
-
-      if (geminiResult.error) {
-        console.error("gemini provider error:", geminiResult.error);
       }
     }
 
-    const openaiAnswer = openaiResult?.answer || null;
-    const geminiAnswer = geminiResult?.answer || null;
+    const providerResultsList = installedProviders.map((provider) => {
+      const result = providerResults[provider.name];
+      const answer = result?.answer || null;
+      const sourceLinks = result?.source_links || [];
+
+      return {
+        provider: provider.name,
+        label: provider.label,
+        answer,
+        source_links: sourceLinks,
+        reference_image: result?.reference_image || null,
+        score: scoreAnswer({
+          answer,
+          sourceLinks,
+          query: normalizedQuery,
+          queryType
+        })
+      };
+    });
+
+    const validProviderAnswers = providerResultsList.filter((item) => item.answer);
 
     let finalAnswer = null;
     let provider = "chiron-nexus";
-    let confidence = "low";
+    let confidence = getConfidenceFromAnswers(
+      validProviderAnswers.map((item) => item.answer)
+    );
     let synthesisSkipped = false;
-    const sources = [];
-    const sourceLinks = dedupeSourceLinks([
-      ...(openaiResult?.source_links || []),
-      ...(geminiResult?.source_links || [])
-    ]);
+    let critique = null;
 
-    if (openaiAnswer) {
-      sources.push("OpenAI Web Search");
-    }
+    const sources = validProviderAnswers.map((item) => item.label);
+    const sourceLinks = dedupeSourceLinks(
+      validProviderAnswers.flatMap((item) => item.source_links || [])
+    );
 
-    if (geminiAnswer) {
-      sources.push("Gemini");
-    }
+    if (validProviderAnswers.length >= 2) {
+      critique = await critiqueProviderAnswers(
+        normalizedQuery,
+        validProviderAnswers,
+        queryType
+      );
 
-    if (openaiAnswer && geminiAnswer) {
-      const disagreement = providersDisagree(openaiAnswer, geminiAnswer);
-      confidence = getConfidence(openaiAnswer, geminiAnswer, disagreement);
+      if (critique?.needs_synthesis) {
+        finalAnswer = await synthesizeWithOpenAI(
+          normalizedQuery,
+          validProviderAnswers,
+          critique
+        );
+      } else if (critique?.winner) {
+        const winner = validProviderAnswers.find(
+          (item) => item.provider === critique.winner
+        );
 
-      if (shouldSkipSynthesis(openaiAnswer, geminiAnswer, disagreement)) {
+        if (winner?.answer) {
+          finalAnswer =
+            (await cleanupSingleProviderAnswer(
+              normalizedQuery,
+              winner.label,
+              winner.answer
+            )) || winner.answer;
+
+          synthesisSkipped = true;
+          confidence = critique.confidence || confidence;
+        }
+      }
+
+      if (!finalAnswer && shouldSkipSynthesis(validProviderAnswers.map((item) => item.answer))) {
+        const directWinner = pickBestDirectAnswer(
+          validProviderAnswers.map((item) => ({
+            provider: item.provider,
+            answer: item.answer
+          }))
+        );
+
         finalAnswer =
           (await cleanupSingleProviderAnswer(
             normalizedQuery,
-            "Chiron Nexus Direct Merge",
-            pickBestDirectAnswer(openaiAnswer, geminiAnswer)
-          )) || pickBestDirectAnswer(openaiAnswer, geminiAnswer);
+            `Chiron Nexus Direct Winner (${directWinner.provider})`,
+            directWinner.answer
+          )) || directWinner.answer;
 
         synthesisSkipped = true;
-      } else {
+      }
+
+      if (!finalAnswer) {
         finalAnswer = await synthesizeWithOpenAI(
           normalizedQuery,
-          openaiAnswer,
-          geminiAnswer,
-          disagreement
+          validProviderAnswers,
+          critique
         );
       }
     }
 
-    if (!finalAnswer && openaiAnswer) {
+    if (!finalAnswer && validProviderAnswers.length === 1) {
+      const onlyAnswer = validProviderAnswers[0];
+
       finalAnswer =
         (await cleanupSingleProviderAnswer(
           normalizedQuery,
-          "OpenAI Web Search",
-          openaiAnswer
-        )) || openaiAnswer;
-
-      provider = "chiron-nexus";
-      confidence = "low";
-    }
-
-    if (!finalAnswer && geminiAnswer) {
-      finalAnswer =
-        (await cleanupSingleProviderAnswer(
-          normalizedQuery,
-          "Gemini",
-          geminiAnswer
-        )) || geminiAnswer;
+          onlyAnswer.label,
+          onlyAnswer.answer
+        )) || onlyAnswer.answer;
 
       provider = "chiron-nexus";
       confidence = "low";
@@ -1253,14 +1823,15 @@ export default async function handler(req, res) {
 
     if (!finalAnswer) {
       return res.status(500).json({
-        answer: "Both AI providers failed to return a usable answer.",
+        answer: "AI providers failed to return a usable answer.",
         sources: []
       });
     }
 
-    let referenceImage = null;
+    let referenceImage =
+      validProviderAnswers.find((item) => item.reference_image)?.reference_image || null;
 
-    if (isVisualQuery(normalizedQuery)) {
+    if (!referenceImage && isVisualQuery(normalizedQuery)) {
       referenceImage = await fetchWikipediaReferenceImage(
         extractVisualSubject(normalizedQuery)
       );
@@ -1273,6 +1844,10 @@ export default async function handler(req, res) {
       reference_image: referenceImage,
       provider,
       confidence,
+      query_type: queryType,
+      consensus_level: critique?.consensus_level || null,
+      arbitration_reason: critique?.reason || null,
+      outlier_providers: critique?.outliers || [],
       synthesis_skipped: synthesisSkipped
     };
 
