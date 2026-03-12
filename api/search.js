@@ -17,6 +17,17 @@ const PROVIDER_LATENCY_ALPHA = 0.35;
 const EXACT_CACHE_TTL_SECONDS = 3600;
 const SEMANTIC_CACHE_TTL_SECONDS = 3600;
 
+const MAX_PROVIDERS_PER_QUERY = 3;
+
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const ANTHROPIC_MODEL =
+  process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-latest";
+const PERPLEXITY_MODEL = process.env.PERPLEXITY_MODEL || "sonar-pro";
+const XAI_MODEL = process.env.XAI_MODEL || "grok-3-latest";
+const MISTRAL_MODEL = process.env.MISTRAL_MODEL || "mistral-medium-latest";
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+
 const ALLOWED_ORIGINS = [
   "https://chironnexus.com",
   "https://www.chironnexus.com",
@@ -109,6 +120,83 @@ function calculateSimilarity(a = "", b = "") {
   });
 
   return overlap / Math.max(wordsA.size, wordsB.size);
+}
+
+function getConfidenceFromAnswers(answers = []) {
+  const validAnswers = answers.filter(Boolean);
+
+  if (validAnswers.length <= 1) {
+    return "low";
+  }
+
+  const similarities = [];
+
+  for (let i = 0; i < validAnswers.length; i++) {
+    for (let j = i + 1; j < validAnswers.length; j++) {
+      similarities.push(calculateSimilarity(validAnswers[i], validAnswers[j]));
+    }
+  }
+
+  if (similarities.length === 0) {
+    return "low";
+  }
+
+  const avgSimilarity =
+    similarities.reduce((sum, value) => sum + value, 0) / similarities.length;
+
+  if (avgSimilarity >= 0.72 && validAnswers.length >= 3) {
+    return "high";
+  }
+
+  if (avgSimilarity >= 0.5) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function shouldSkipSynthesis(answers = []) {
+  const validAnswers = answers.filter(Boolean);
+
+  if (validAnswers.length < 2) {
+    return false;
+  }
+
+  const similarities = [];
+
+  for (let i = 0; i < validAnswers.length; i++) {
+    for (let j = i + 1; j < validAnswers.length; j++) {
+      similarities.push(calculateSimilarity(validAnswers[i], validAnswers[j]));
+    }
+  }
+
+  if (similarities.length === 0) {
+    return false;
+  }
+
+  const avgSimilarity =
+    similarities.reduce((sum, value) => sum + value, 0) / similarities.length;
+
+  return avgSimilarity >= 0.82;
+}
+
+function pickBestDirectAnswer(candidates = []) {
+  const valid = candidates.filter((item) => item?.answer);
+
+  if (valid.length === 0) {
+    return { provider: null, answer: null };
+  }
+
+  const sorted = [...valid].sort((a, b) => {
+    const aScore = typeof a.score === "number" ? a.score : -999;
+    const bScore = typeof b.score === "number" ? b.score : -999;
+    return bScore - aScore;
+  });
+
+  return {
+    provider: sorted[0].provider,
+    answer: sorted[0].answer
+  };
 }
 
 function fingerprintQuery(q = "") {
@@ -394,6 +482,46 @@ function chooseProviderDelays(providerConfigs) {
   });
 
   return delays;
+}
+
+function chooseProvidersForQuery(queryType, providers) {
+  const priorityByType = {
+    fresh: ["perplexity", "grok", "openai", "gemini"],
+    comparison: ["claude", "openai", "gemini", "deepseek"],
+    visual: ["perplexity", "openai", "gemini"],
+    historical: ["openai", "claude", "perplexity"],
+    explanation: ["claude", "openai", "deepseek", "gemini"],
+    factual: ["openai", "gemini", "perplexity", "deepseek"],
+    general: ["openai", "gemini", "claude", "perplexity"]
+  };
+
+  const preferredOrder = priorityByType[queryType] || priorityByType.general;
+  const byName = new Map(providers.map((provider) => [provider.name, provider]));
+  const selected = [];
+
+  for (const name of preferredOrder) {
+    const provider = byName.get(name);
+    if (provider && provider.enabled) {
+      selected.push(provider);
+    }
+    if (selected.length >= MAX_PROVIDERS_PER_QUERY) {
+      break;
+    }
+  }
+
+  if (selected.length < Math.min(MAX_PROVIDERS_PER_QUERY, providers.length)) {
+    for (const provider of providers) {
+      if (!provider.enabled) continue;
+      if (!selected.find((item) => item.name === provider.name)) {
+        selected.push(provider);
+      }
+      if (selected.length >= MAX_PROVIDERS_PER_QUERY) {
+        break;
+      }
+    }
+  }
+
+  return selected;
 }
 
 function sleep(ms) {
@@ -713,6 +841,19 @@ function classifyQuery(query = "") {
   }
 
   if (
+    q.includes("historically") ||
+    q.includes("history of ") ||
+    q.includes("how did people") ||
+    q.includes("used to think") ||
+    q.includes("old encyclopedia") ||
+    q.includes("in 18") ||
+    q.includes("in 19") ||
+    q.includes("in 20")
+  ) {
+    return "historical";
+  }
+
+  if (
     q.startsWith("why ") ||
     q.startsWith("how ") ||
     q.includes("explain") ||
@@ -771,7 +912,7 @@ function scoreAnswer({ answer, sourceLinks = [], query, queryType }) {
     score += 3;
   }
 
-  if (queryType === "fresh" && !hasSources) {
+  if ((queryType === "fresh" || queryType === "historical") && !hasSources) {
     score -= 10;
   }
 
@@ -780,6 +921,121 @@ function scoreAnswer({ answer, sourceLinks = [], query, queryType }) {
   }
 
   return Math.round(score);
+}
+
+function normalizeHistoricalSubject(query = "") {
+  return query
+    .replace(/\b(historically|history of|old encyclopedia|used to think|how did people)\b/gi, " ")
+    .replace(/\b(in\s+(18|19|20)\d{2})\b/gi, " ")
+    .replace(/[?!.]+$/g, "")
+    .trim()
+    .slice(0, 140);
+}
+
+async function fetchOpenLibraryHistoricalReferences(subject) {
+  if (!subject) return [];
+
+  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(subject)}&limit=5`;
+
+  try {
+    const response = await fetchWithAbort(
+      url,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      4000,
+      "Open Library search"
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    const docs = Array.isArray(data?.docs) ? data.docs : [];
+
+    return docs.slice(0, 3).map((doc) => ({
+      source: "Open Library",
+      title: doc.title || "Untitled",
+      year: doc.first_publish_year || null,
+      author:
+        Array.isArray(doc.author_name) && doc.author_name.length > 0
+          ? doc.author_name.slice(0, 2).join(", ")
+          : null,
+      url: doc.key ? `https://openlibrary.org${doc.key}` : "",
+      summary:
+        typeof doc.first_sentence === "string"
+          ? doc.first_sentence
+          : Array.isArray(doc.first_sentence)
+            ? doc.first_sentence[0] || null
+            : null
+    }));
+  } catch (error) {
+    debugLog("Open Library historical lookup failed:", error?.message || error);
+    return [];
+  }
+}
+
+async function fetchInternetArchiveHistoricalReferences(subject) {
+  if (!subject) return [];
+
+  const query = `title:(${subject}) OR subject:(${subject})`;
+  const url =
+    `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}` +
+    `&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=year&rows=5&page=1&output=json`;
+
+  try {
+    const response = await fetchWithAbort(
+      url,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      4500,
+      "Internet Archive search"
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    const docs = Array.isArray(data?.response?.docs) ? data.response.docs : [];
+
+    return docs.slice(0, 3).map((doc) => ({
+      source: "Internet Archive",
+      title: doc.title || "Untitled",
+      year: doc.year || null,
+      author: doc.creator || null,
+      url: doc.identifier
+        ? `https://archive.org/details/${encodeURIComponent(doc.identifier)}`
+        : "",
+      summary: null
+    }));
+  } catch (error) {
+    debugLog("Internet Archive historical lookup failed:", error?.message || error);
+    return [];
+  }
+}
+
+async function fetchHistoricalReferences(query, queryType) {
+  if (queryType !== "historical") {
+    return [];
+  }
+
+  const subject = normalizeHistoricalSubject(query);
+
+  const [openLibrary, internetArchive] = await Promise.all([
+    fetchOpenLibraryHistoricalReferences(subject),
+    fetchInternetArchiveHistoricalReferences(subject)
+  ]);
+
+  return [...openLibrary, ...internetArchive].slice(0, 5);
 }
 
 async function callOpenAI(query) {
@@ -793,7 +1049,7 @@ async function callOpenAI(query) {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
+          model: OPENAI_MODEL,
           tools: [{ type: "web_search" }],
           input: query
         })
@@ -831,8 +1087,9 @@ async function callOpenAI(query) {
 async function callGemini(query) {
   try {
     const response = await fetchWithAbort(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" +
-        process.env.GEMINI_API_KEY,
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+        GEMINI_MODEL
+      )}:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -880,7 +1137,7 @@ async function callClaude(query) {
           "anthropic-version": "2023-06-01"
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: ANTHROPIC_MODEL,
           max_tokens: 900,
           messages: [
             {
@@ -925,7 +1182,7 @@ async function callPerplexity(query) {
           Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`
         },
         body: JSON.stringify({
-          model: "sonar-pro",
+          model: PERPLEXITY_MODEL,
           messages: [
             {
               role: "system",
@@ -972,7 +1229,7 @@ async function callGrok(query) {
           Authorization: `Bearer ${process.env.XAI_API_KEY}`
         },
         body: JSON.stringify({
-          model: "grok-3-latest",
+          model: XAI_MODEL,
           messages: [
             {
               role: "system",
@@ -1018,7 +1275,7 @@ async function callMistral(query) {
           Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`
         },
         body: JSON.stringify({
-          model: "mistral-medium-latest",
+          model: MISTRAL_MODEL,
           messages: [
             {
               role: "system",
@@ -1065,7 +1322,7 @@ async function callDeepSeek(query) {
           Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: DEEPSEEK_MODEL,
           messages: [
             {
               role: "system",
@@ -1147,7 +1404,7 @@ Your task:
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
+          model: OPENAI_MODEL,
           input: cleanupPrompt
         })
       },
@@ -1242,7 +1499,7 @@ ${JSON.stringify(packet)}
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
+          model: OPENAI_MODEL,
           input: critiquePrompt
         })
       },
@@ -1353,7 +1610,7 @@ Your task:
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          model: "gpt-4.1-mini",
+          model: OPENAI_MODEL,
           input: synthesisPrompt
         })
       },
@@ -1570,13 +1827,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v19:${normalizedQuery}`;
+  const cacheKey = `search:v20:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
     : "";
   const semanticKey = semanticFingerprint
-    ? `semantic:v5:${semanticFingerprint}`
+    ? `semantic:v6:${semanticFingerprint}`
     : "";
 
   try {
@@ -1617,10 +1874,13 @@ export default async function handler(req, res) {
     const providerConfigs = providerStateAndStats.map((provider) => ({
       ...provider,
       enabled: Boolean(process.env[provider.envKey]),
-      cooling: isProviderCoolingDown(provider.state)
+      cooling: isProviderCoolingDown(provider.state),
+      available: false
     }));
 
-    const installedProviders = providerConfigs.filter((provider) => provider.enabled);
+    const selectedProviders = chooseProvidersForQuery(queryType, providerConfigs);
+
+    const installedProviders = selectedProviders.filter((provider) => provider.enabled);
     const allCooling =
       installedProviders.length > 0 &&
       installedProviders.every((provider) => provider.cooling);
@@ -1762,6 +2022,7 @@ export default async function handler(req, res) {
           validProviderAnswers,
           critique
         );
+        confidence = critique.confidence || confidence;
       } else if (critique?.winner) {
         const winner = validProviderAnswers.find(
           (item) => item.provider === critique.winner
@@ -1784,7 +2045,8 @@ export default async function handler(req, res) {
         const directWinner = pickBestDirectAnswer(
           validProviderAnswers.map((item) => ({
             provider: item.provider,
-            answer: item.answer
+            answer: item.answer,
+            score: item.score
           }))
         );
 
@@ -1837,11 +2099,17 @@ export default async function handler(req, res) {
       );
     }
 
+    const historicalReferences = await fetchHistoricalReferences(
+      normalizedQuery,
+      queryType
+    );
+
     const result = {
       answer: finalAnswer,
       sources,
       source_links: sourceLinks,
       reference_image: referenceImage,
+      historical_references: historicalReferences,
       provider,
       confidence,
       query_type: queryType,
