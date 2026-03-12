@@ -1,6 +1,9 @@
 import { kv } from "@vercel/kv";
 import crypto from "crypto";
 
+const SEARCH_ENABLED = process.env.SEARCH_ENABLED !== "false";
+const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
+
 const PROVIDER_RACE_GRACE_MS = 1200;
 const PROVIDER_SECONDARY_DELAY_MS = 350;
 
@@ -11,12 +14,21 @@ const PROVIDER_STATE_TTL_SECONDS = 24 * 60 * 60;
 const PROVIDER_STATS_TTL_SECONDS = 7 * 24 * 60 * 60;
 const PROVIDER_LATENCY_ALPHA = 0.35;
 
+const EXACT_CACHE_TTL_SECONDS = 3600;
+const SEMANTIC_CACHE_TTL_SECONDS = 3600;
+
 const ALLOWED_ORIGINS = [
   "https://chironnexus.com",
   "https://www.chironnexus.com",
   "https://chironsearch.vercel.app",
   "http://localhost:3000"
 ];
+
+function debugLog(...args) {
+  if (DEBUG_LOGS) {
+    console.error(...args);
+  }
+}
 
 function normalizeQuery(q = "") {
   return q.toLowerCase().trim().replace(/\s+/g, " ");
@@ -45,19 +57,12 @@ function tokenize(text = "") {
     .filter(Boolean);
 }
 
-function providersDisagree(a, b) {
-  if (!a || !b) return false;
-
-  const lengthDiff = Math.abs(a.length - b.length);
-  if (lengthDiff > 500) {
-    return true;
-  }
-
+function calculateSimilarity(a = "", b = "") {
   const wordsA = new Set(tokenize(a));
   const wordsB = new Set(tokenize(b));
 
   if (wordsA.size === 0 || wordsB.size === 0) {
-    return false;
+    return 0;
   }
 
   let overlap = 0;
@@ -68,8 +73,18 @@ function providersDisagree(a, b) {
     }
   });
 
-  const similarity = overlap / Math.max(wordsA.size, wordsB.size);
+  return overlap / Math.max(wordsA.size, wordsB.size);
+}
 
+function providersDisagree(a, b) {
+  if (!a || !b) return false;
+
+  const lengthDiff = Math.abs(a.length - b.length);
+  if (lengthDiff > 500) {
+    return true;
+  }
+
+  const similarity = calculateSimilarity(a, b);
   return similarity < 0.35;
 }
 
@@ -83,24 +98,34 @@ function getConfidence(openaiAnswer, geminiAnswer, disagreement) {
   }
 
   const lengthDiff = Math.abs(openaiAnswer.length - geminiAnswer.length);
-  const wordsA = new Set(tokenize(openaiAnswer));
-  const wordsB = new Set(tokenize(geminiAnswer));
-
-  let overlap = 0;
-  wordsA.forEach((word) => {
-    if (wordsB.has(word)) {
-      overlap++;
-    }
-  });
-
-  const similarity =
-    overlap / Math.max(wordsA.size || 1, wordsB.size || 1);
+  const similarity = calculateSimilarity(openaiAnswer, geminiAnswer);
 
   if (similarity >= 0.65 && lengthDiff < 250) {
     return "high";
   }
 
   return "medium";
+}
+
+function shouldSkipSynthesis(openaiAnswer, geminiAnswer, disagreement) {
+  if (!openaiAnswer || !geminiAnswer || disagreement) {
+    return false;
+  }
+
+  const similarity = calculateSimilarity(openaiAnswer, geminiAnswer);
+  const lengthDiff = Math.abs(openaiAnswer.length - geminiAnswer.length);
+
+  return similarity >= 0.82 && lengthDiff < 180;
+}
+
+function pickBestDirectAnswer(openaiAnswer, geminiAnswer) {
+  const openaiLength = openaiAnswer?.length || 0;
+  const geminiLength = geminiAnswer?.length || 0;
+
+  if (openaiLength === 0) return geminiAnswer || null;
+  if (geminiLength === 0) return openaiAnswer || null;
+
+  return openaiLength >= geminiLength ? openaiAnswer : geminiAnswer;
 }
 
 function fingerprintQuery(q = "") {
@@ -430,7 +455,7 @@ async function callOpenAI(query) {
     );
 
     const data = await response.json();
-    console.error("OpenAI raw response:", JSON.stringify(data, null, 2));
+    debugLog("OpenAI raw response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return null;
@@ -475,7 +500,7 @@ async function callGemini(query) {
     );
 
     const data = await response.json();
-    console.error("Gemini raw response:", JSON.stringify(data, null, 2));
+    debugLog("Gemini raw response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return null;
@@ -539,7 +564,7 @@ Your task:
     );
 
     const data = await response.json();
-    console.error("Synthesis raw response:", JSON.stringify(data, null, 2));
+    debugLog("Synthesis raw response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return null;
@@ -606,7 +631,7 @@ Your task:
     );
 
     const data = await response.json();
-    console.error("Cleanup raw response:", JSON.stringify(data, null, 2));
+    debugLog("Cleanup raw response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return null;
@@ -699,6 +724,13 @@ async function waitWithTimeout(promise, ms) {
 
 export default async function handler(req, res) {
   const requestStart = Date.now();
+
+  if (!SEARCH_ENABLED) {
+    return res.status(503).json({
+      answer: "Search is temporarily disabled.",
+      sources: []
+    });
+  }
 
   const origin = getHeader(req, "origin");
   const contentType = getHeader(req, "content-type");
@@ -801,7 +833,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v13:${normalizedQuery}`;
+  const cacheKey = `search:v14:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
@@ -826,7 +858,7 @@ export default async function handler(req, res) {
       const semanticCached = await kv.get(semanticKey);
 
       if (semanticCached) {
-        await kv.set(cacheKey, semanticCached, { ex: 3600 });
+        await kv.set(cacheKey, semanticCached, { ex: EXACT_CACHE_TTL_SECONDS });
 
         return res.status(200).json({
           ...semanticCached,
@@ -989,6 +1021,7 @@ export default async function handler(req, res) {
     let finalAnswer = null;
     let provider = "chiron-nexus";
     let confidence = "low";
+    let synthesisSkipped = false;
     const sources = [];
 
     if (openaiAnswer) {
@@ -1003,12 +1036,23 @@ export default async function handler(req, res) {
       const disagreement = providersDisagree(openaiAnswer, geminiAnswer);
       confidence = getConfidence(openaiAnswer, geminiAnswer, disagreement);
 
-      finalAnswer = await synthesizeWithOpenAI(
-        normalizedQuery,
-        openaiAnswer,
-        geminiAnswer,
-        disagreement
-      );
+      if (shouldSkipSynthesis(openaiAnswer, geminiAnswer, disagreement)) {
+        finalAnswer =
+          (await cleanupSingleProviderAnswer(
+            normalizedQuery,
+            "Chiron Nexus Direct Merge",
+            pickBestDirectAnswer(openaiAnswer, geminiAnswer)
+          )) || pickBestDirectAnswer(openaiAnswer, geminiAnswer);
+
+        synthesisSkipped = true;
+      } else {
+        finalAnswer = await synthesizeWithOpenAI(
+          normalizedQuery,
+          openaiAnswer,
+          geminiAnswer,
+          disagreement
+        );
+      }
     }
 
     if (!finalAnswer && openaiAnswer) {
@@ -1046,14 +1090,15 @@ export default async function handler(req, res) {
       answer: finalAnswer,
       sources,
       provider,
-      confidence
+      confidence,
+      synthesis_skipped: synthesisSkipped
     };
 
     if (sources.length > 0) {
-      await kv.set(cacheKey, result, { ex: 3600 });
+      await kv.set(cacheKey, result, { ex: EXACT_CACHE_TTL_SECONDS });
 
       if (semanticKey) {
-        await kv.set(semanticKey, result, { ex: 3600 });
+        await kv.set(semanticKey, result, { ex: SEMANTIC_CACHE_TTL_SECONDS });
       }
     }
 
