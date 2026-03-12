@@ -562,6 +562,20 @@ function dedupeSourceLinks(links = []) {
   return deduped.slice(0, 10);
 }
 
+function dedupeHistoricalReferences(items = []) {
+  const seen = new Set();
+  const deduped = [];
+
+  for (const item of items) {
+    const key = `${item?.source || ""}|${item?.title || ""}|${item?.url || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+
+  return deduped.slice(0, 8);
+}
+
 function extractOutputTextParts(data) {
   const output = Array.isArray(data?.output) ? data.output : [];
   const parts = [];
@@ -1023,6 +1037,103 @@ async function fetchInternetArchiveHistoricalReferences(subject) {
   }
 }
 
+async function fetchProjectGutenbergHistoricalReferences(subject) {
+  if (!subject) return [];
+
+  const url = `https://gutendex.com/books?search=${encodeURIComponent(subject)}`;
+
+  try {
+    const response = await fetchWithAbort(
+      url,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      4500,
+      "Project Gutenberg search"
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    const results = Array.isArray(data?.results) ? data.results : [];
+
+    return results.slice(0, 3).map((book) => ({
+      source: "Project Gutenberg",
+      title: book.title || "Untitled",
+      year: null,
+      author:
+        Array.isArray(book.authors) && book.authors.length > 0
+          ? book.authors
+              .slice(0, 2)
+              .map((author) => author.name)
+              .filter(Boolean)
+              .join(", ")
+          : null,
+      url:
+        book.formats?.["text/html"] ||
+        book.formats?.["text/html; charset=utf-8"] ||
+        book.formats?.["text/plain; charset=utf-8"] ||
+        book.formats?.["text/plain"] ||
+        "",
+      summary: Array.isArray(book.subjects)
+        ? book.subjects.slice(0, 2).join(" • ")
+        : null
+    }));
+  } catch (error) {
+    debugLog("Project Gutenberg historical lookup failed:", error?.message || error);
+    return [];
+  }
+}
+
+async function fetchWikidataHistoricalReferences(subject) {
+  if (!subject) return [];
+
+  const url =
+    `https://www.wikidata.org/w/api.php?action=wbsearchentities` +
+    `&search=${encodeURIComponent(subject)}` +
+    `&language=en&format=json&limit=3&origin=*`;
+
+  try {
+    const response = await fetchWithAbort(
+      url,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      },
+      4000,
+      "Wikidata search"
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    const results = Array.isArray(data?.search) ? data.search : [];
+
+    return results.slice(0, 3).map((item) => ({
+      source: "Wikidata",
+      title: item.label || "Untitled",
+      year: null,
+      author: null,
+      url: item.id
+        ? `https://www.wikidata.org/wiki/${encodeURIComponent(item.id)}`
+        : "",
+      summary: item.description || null
+    }));
+  } catch (error) {
+    debugLog("Wikidata historical lookup failed:", error?.message || error);
+    return [];
+  }
+}
+
 async function fetchHistoricalReferences(query, queryType) {
   if (queryType !== "historical") {
     return [];
@@ -1030,12 +1141,19 @@ async function fetchHistoricalReferences(query, queryType) {
 
   const subject = normalizeHistoricalSubject(query);
 
-  const [openLibrary, internetArchive] = await Promise.all([
+  const [openLibrary, internetArchive, gutenberg, wikidata] = await Promise.all([
     fetchOpenLibraryHistoricalReferences(subject),
-    fetchInternetArchiveHistoricalReferences(subject)
+    fetchInternetArchiveHistoricalReferences(subject),
+    fetchProjectGutenbergHistoricalReferences(subject),
+    fetchWikidataHistoricalReferences(subject)
   ]);
 
-  return [...openLibrary, ...internetArchive].slice(0, 5);
+  return dedupeHistoricalReferences([
+    ...openLibrary,
+    ...internetArchive,
+    ...gutenberg,
+    ...wikidata
+  ]).slice(0, 6);
 }
 
 async function callOpenAI(query) {
@@ -1827,13 +1945,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v20:${normalizedQuery}`;
+  const cacheKey = `search:v21:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
     : "";
   const semanticKey = semanticFingerprint
-    ? `semantic:v6:${semanticFingerprint}`
+    ? `semantic:v7:${semanticFingerprint}`
     : "";
 
   try {
