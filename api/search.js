@@ -19,7 +19,10 @@ const PROVIDER_LATENCY_ALPHA = 0.35;
 const EXACT_CACHE_TTL_SECONDS = 3600;
 const SEMANTIC_CACHE_TTL_SECONDS = 3600;
 
-const MAX_PROVIDERS_PER_QUERY = 3;
+const MIN_PANEL_SIZE = 2;
+const BASE_PANEL_SIZE = 3;
+const MAX_PANEL_SIZE = 5;
+
 const MAX_SOURCE_LINKS = 10;
 const MAX_HISTORICAL_REFERENCES = 8;
 
@@ -78,37 +81,86 @@ const PROVIDERS = [
   {
     name: "openai",
     label: "OpenAI Web Search",
-    envKeys: ["AI_PROVIDER_OPENAI_KEY", "OPENAI_API_KEY"]
+    envKeys: ["AI_PROVIDER_OPENAI_KEY", "OPENAI_API_KEY"],
+    strengths: ["factual", "reasoning", "synthesis", "verification"],
+    cost_tier: "high",
+    speed_tier: "medium",
+    grounded: true,
+    good_for_fresh: true,
+    good_for_long_reasoning: true,
+    good_for_cleanup: true
   },
   {
     name: "gemini",
     label: "Gemini",
-    envKeys: ["AI_PROVIDER_GEMINI_KEY", "GEMINI_API_KEY"]
+    envKeys: ["AI_PROVIDER_GEMINI_KEY", "GEMINI_API_KEY"],
+    strengths: ["factual", "general", "fast"],
+    cost_tier: "low",
+    speed_tier: "fast",
+    grounded: false,
+    good_for_fresh: false,
+    good_for_long_reasoning: false,
+    good_for_cleanup: false
   },
   {
     name: "claude",
     label: "Claude",
-    envKeys: ["AI_PROVIDER_ANTHROPIC_KEY", "ANTHROPIC_API_KEY"]
+    envKeys: ["AI_PROVIDER_ANTHROPIC_KEY", "ANTHROPIC_API_KEY"],
+    strengths: ["reasoning", "explanation", "comparison", "synthesis"],
+    cost_tier: "high",
+    speed_tier: "medium",
+    grounded: false,
+    good_for_fresh: false,
+    good_for_long_reasoning: true,
+    good_for_cleanup: false
   },
   {
     name: "perplexity",
     label: "Perplexity",
-    envKeys: ["AI_PROVIDER_PERPLEXITY_KEY", "PERPLEXITY_API_KEY"]
+    envKeys: ["AI_PROVIDER_PERPLEXITY_KEY", "PERPLEXITY_API_KEY"],
+    strengths: ["fresh", "grounding", "sources", "visual"],
+    cost_tier: "medium",
+    speed_tier: "medium",
+    grounded: true,
+    good_for_fresh: true,
+    good_for_long_reasoning: false,
+    good_for_cleanup: false
   },
   {
     name: "grok",
     label: "Grok",
-    envKeys: ["AI_PROVIDER_XAI_KEY", "XAI_API_KEY"]
+    envKeys: ["AI_PROVIDER_XAI_KEY", "XAI_API_KEY"],
+    strengths: ["fresh", "current-events", "general"],
+    cost_tier: "medium",
+    speed_tier: "fast",
+    grounded: false,
+    good_for_fresh: true,
+    good_for_long_reasoning: false,
+    good_for_cleanup: false
   },
   {
     name: "mistral",
     label: "Mistral",
-    envKeys: ["AI_PROVIDER_MISTRAL_KEY", "MISTRAL_API_KEY"]
+    envKeys: ["AI_PROVIDER_MISTRAL_KEY", "MISTRAL_API_KEY"],
+    strengths: ["efficient", "general", "low-cost"],
+    cost_tier: "low",
+    speed_tier: "fast",
+    grounded: false,
+    good_for_fresh: false,
+    good_for_long_reasoning: false,
+    good_for_cleanup: false
   },
   {
     name: "deepseek",
     label: "DeepSeek",
-    envKeys: ["AI_PROVIDER_DEEPSEEK_KEY", "DEEPSEEK_API_KEY"]
+    envKeys: ["AI_PROVIDER_DEEPSEEK_KEY", "DEEPSEEK_API_KEY"],
+    strengths: ["technical", "reasoning", "comparison"],
+    cost_tier: "low",
+    speed_tier: "medium",
+    grounded: false,
+    good_for_fresh: false,
+    good_for_long_reasoning: true,
+    good_for_cleanup: false
   }
 ];
 
@@ -459,6 +511,10 @@ function buildPublicCacheMissResponse(normalizedQuery, queryType, requestStart) 
     provider: "chiron-cache",
     confidence: "low",
     query_type: queryType,
+    query_difficulty: "unknown",
+    route_mode: "cache-only",
+    panel_size_initial: 0,
+    panel_size_final: 0,
     consensus_level: null,
     arbitration_reason: null,
     outlier_providers: [],
@@ -667,46 +723,6 @@ function chooseProviderDelays(providerConfigs) {
   });
 
   return delays;
-}
-
-function chooseProvidersForQuery(queryType, providers) {
-  const priorityByType = {
-    fresh: ["perplexity", "grok", "openai", "gemini"],
-    comparison: ["claude", "openai", "gemini", "deepseek"],
-    visual: ["perplexity", "openai", "gemini"],
-    historical: ["openai", "claude", "perplexity"],
-    explanation: ["claude", "openai", "deepseek", "gemini"],
-    factual: ["openai", "gemini", "perplexity", "deepseek"],
-    general: ["openai", "gemini", "claude", "perplexity"]
-  };
-
-  const preferredOrder = priorityByType[queryType] || priorityByType.general;
-  const byName = new Map(providers.map((provider) => [provider.name, provider]));
-  const selected = [];
-
-  for (const name of preferredOrder) {
-    const provider = byName.get(name);
-    if (provider && provider.enabled) {
-      selected.push(provider);
-    }
-    if (selected.length >= MAX_PROVIDERS_PER_QUERY) {
-      break;
-    }
-  }
-
-  if (selected.length < Math.min(MAX_PROVIDERS_PER_QUERY, providers.length)) {
-    for (const provider of providers) {
-      if (!provider.enabled) continue;
-      if (!selected.find((item) => item.name === provider.name)) {
-        selected.push(provider);
-      }
-      if (selected.length >= MAX_PROVIDERS_PER_QUERY) {
-        break;
-      }
-    }
-  }
-
-  return selected;
 }
 
 function sleep(ms) {
@@ -1097,6 +1113,280 @@ function classifyQuery(query = "") {
   }
 
   return "general";
+}
+
+function estimateQueryDifficulty(query = "", queryType = "general") {
+  const q = query.toLowerCase();
+  const tokenCount = tokenize(q).length;
+
+  let score = 0;
+
+  if (tokenCount >= 14) score += 2;
+  else if (tokenCount >= 9) score += 1;
+
+  const hardSignals = [
+    "analyze",
+    "analysis",
+    "tradeoff",
+    "trade-off",
+    "risks",
+    "long-term",
+    "implications",
+    "compare",
+    "versus",
+    "difference",
+    "why",
+    "how",
+    "historically",
+    "what changed",
+    "pros and cons",
+    "best approach",
+    "strategy",
+    "architecture"
+  ];
+
+  const mediumSignals = [
+    "explain",
+    "overview",
+    "summary",
+    "history",
+    "research",
+    "technical",
+    "reasoning"
+  ];
+
+  if (hardSignals.some((signal) => q.includes(signal))) {
+    score += 2;
+  } else if (mediumSignals.some((signal) => q.includes(signal))) {
+    score += 1;
+  }
+
+  if (queryType === "comparison" || queryType === "historical") {
+    score += 2;
+  }
+
+  if (queryType === "explanation" || queryType === "fresh") {
+    score += 1;
+  }
+
+  if (queryType === "visual" || queryType === "factual") {
+    score -= 1;
+  }
+
+  if (score <= 0) return "easy";
+  if (score <= 2) return "medium";
+  return "hard";
+}
+
+function buildRoutePlan({ query, queryType, difficulty, providers }) {
+  const enabledProviders = providers.filter((provider) => provider.enabled);
+  const enabledCount = enabledProviders.length;
+
+  let routeMode = "balanced";
+  let initialPanelSize = BASE_PANEL_SIZE;
+  let maxPanelSize = Math.min(MAX_PANEL_SIZE, enabledCount);
+  let requireGrounding = false;
+  let allowSynthesis = true;
+  let expandOnDisagreement = true;
+
+  if (difficulty === "easy") {
+    initialPanelSize = Math.min(MIN_PANEL_SIZE, enabledCount);
+    allowSynthesis = false;
+    routeMode = "cheap-first";
+  }
+
+  if (difficulty === "medium") {
+    initialPanelSize = Math.min(BASE_PANEL_SIZE, enabledCount);
+    routeMode = "balanced";
+  }
+
+  if (difficulty === "hard") {
+    initialPanelSize = Math.min(4, enabledCount);
+    routeMode = "reasoning-first";
+    allowSynthesis = true;
+  }
+
+  if (queryType === "fresh") {
+    initialPanelSize = Math.min(Math.max(initialPanelSize, 3), enabledCount);
+    maxPanelSize = Math.min(Math.max(initialPanelSize + 1, 4), enabledCount, MAX_PANEL_SIZE);
+    routeMode = "grounded-first";
+    requireGrounding = true;
+    allowSynthesis = true;
+  }
+
+  if (queryType === "historical") {
+    initialPanelSize = Math.min(Math.max(initialPanelSize, 3), enabledCount);
+    routeMode = "historical-first";
+    allowSynthesis = true;
+  }
+
+  if (queryType === "comparison") {
+    initialPanelSize = Math.min(Math.max(initialPanelSize, 3), enabledCount);
+    routeMode = "reasoning-first";
+    allowSynthesis = true;
+  }
+
+  if (queryType === "visual") {
+    initialPanelSize = Math.min(Math.max(initialPanelSize, 2), enabledCount);
+    routeMode = "visual-first";
+    requireGrounding = true;
+  }
+
+  if (enabledCount <= 2) {
+    initialPanelSize = enabledCount;
+    maxPanelSize = enabledCount;
+    expandOnDisagreement = false;
+  } else {
+    maxPanelSize = Math.max(initialPanelSize, maxPanelSize);
+  }
+
+  return {
+    query_type: queryType,
+    difficulty,
+    route_mode: routeMode,
+    require_grounding: requireGrounding,
+    allow_synthesis: allowSynthesis,
+    expand_on_disagreement: expandOnDisagreement,
+    initial_panel_size: initialPanelSize,
+    max_panel_size: maxPanelSize
+  };
+}
+
+function scoreProviderForRoute(provider, routePlan) {
+  let score = 0;
+
+  if (!provider.enabled) {
+    return -9999;
+  }
+
+  const avgLatency =
+    typeof provider.stats?.avg_latency_ms === "number"
+      ? provider.stats.avg_latency_ms
+      : null;
+
+  const failureCount = Number(provider.state?.failures || 0);
+  const coolingPenalty = provider.cooling ? 100 : 0;
+
+  if (routePlan.route_mode === "cheap-first") {
+    if (provider.cost_tier === "low") score += 25;
+    if (provider.speed_tier === "fast") score += 20;
+  }
+
+  if (routePlan.route_mode === "grounded-first") {
+    if (provider.grounded) score += 28;
+    if (provider.good_for_fresh) score += 18;
+    if (provider.name === "perplexity") score += 14;
+    if (provider.name === "openai") score += 8;
+    if (provider.name === "grok") score += 8;
+  }
+
+  if (routePlan.route_mode === "reasoning-first") {
+    if (provider.good_for_long_reasoning) score += 22;
+    if (provider.strengths.includes("reasoning")) score += 18;
+    if (provider.strengths.includes("comparison")) score += 10;
+  }
+
+  if (routePlan.route_mode === "historical-first") {
+    if (provider.grounded) score += 14;
+    if (provider.good_for_long_reasoning) score += 16;
+    if (provider.name === "openai") score += 10;
+    if (provider.name === "claude") score += 10;
+  }
+
+  if (routePlan.route_mode === "visual-first") {
+    if (provider.strengths.includes("visual")) score += 20;
+    if (provider.grounded) score += 10;
+    if (provider.name === "perplexity") score += 12;
+  }
+
+  if (routePlan.route_mode === "balanced") {
+    if (provider.speed_tier === "fast") score += 8;
+    if (provider.cost_tier === "low") score += 8;
+    if (provider.strengths.includes(routePlan.query_type)) score += 16;
+  }
+
+  if (provider.strengths.includes(routePlan.query_type)) {
+    score += 18;
+  }
+
+  if (provider.strengths.includes("verification")) {
+    score += 4;
+  }
+
+  if (avgLatency != null) {
+    if (avgLatency <= 2500) score += 10;
+    else if (avgLatency <= 5000) score += 5;
+  }
+
+  score -= Math.min(failureCount * 4, 16);
+  score -= coolingPenalty;
+
+  return score;
+}
+
+function selectProvidersForRoutePlan(routePlan, providers) {
+  const scored = providers
+    .filter((provider) => provider.enabled)
+    .map((provider) => ({
+      ...provider,
+      route_score: scoreProviderForRoute(provider, routePlan)
+    }))
+    .sort((a, b) => b.route_score - a.route_score);
+
+  const initialProviders = scored.slice(0, routePlan.initial_panel_size);
+  const expansionProviders = scored
+    .filter(
+      (provider) =>
+        !initialProviders.find((item) => item.name === provider.name)
+    )
+    .slice(0, Math.max(0, routePlan.max_panel_size - initialProviders.length));
+
+  return {
+    initialProviders,
+    expansionProviders
+  };
+}
+
+function shouldExpandPanel({
+  routePlan,
+  critique,
+  validProviderAnswers,
+  sourceLinks,
+  remainingExpansionCount
+}) {
+  if (!routePlan.expand_on_disagreement) {
+    return false;
+  }
+
+  if (remainingExpansionCount <= 0) {
+    return false;
+  }
+
+  if (validProviderAnswers.length < 2) {
+    return true;
+  }
+
+  if (critique?.consensus_level === "low") {
+    return true;
+  }
+
+  if (critique?.outliers?.length) {
+    return true;
+  }
+
+  if (routePlan.require_grounding && sourceLinks.length < 2) {
+    return true;
+  }
+
+  const confidence = getConfidenceFromAnswers(
+    validProviderAnswers.map((item) => item.answer)
+  );
+
+  if (confidence === "low" && routePlan.difficulty !== "easy") {
+    return true;
+  }
+
+  return false;
 }
 
 function scoreAnswer({ answer, sourceLinks = [], query, queryType }) {
@@ -2087,6 +2377,131 @@ async function waitWithTimeout(promise, ms) {
   }
 }
 
+async function executeProviderPanel(selectedProviders, normalizedQuery) {
+  const installedProviders = selectedProviders.filter((provider) => provider.enabled);
+
+  if (installedProviders.length === 0) {
+    return {};
+  }
+
+  const allCooling =
+    installedProviders.length > 0 &&
+    installedProviders.every((provider) => provider.cooling);
+
+  installedProviders.forEach((provider) => {
+    provider.available = allCooling || !provider.cooling;
+  });
+
+  const delays = chooseProviderDelays(installedProviders);
+
+  const providerTasks = {};
+  const providerResults = {};
+
+  for (const provider of installedProviders) {
+    if (provider.available) {
+      providerTasks[provider.name] = callProviderWithTracking(
+        provider.name,
+        normalizedQuery,
+        PROVIDER_CALLS[provider.name],
+        delays[provider.name] || 0
+      );
+    } else {
+      providerResults[provider.name] = {
+        name: provider.name,
+        answer: null,
+        source_links: [],
+        reference_image: null,
+        error: new Error("Provider cooling down"),
+        latency_ms: null,
+        skipped: true
+      };
+    }
+  }
+
+  const activeTaskEntries = Object.entries(providerTasks);
+
+  if (activeTaskEntries.length > 0) {
+    const firstSettled = await Promise.race(
+      activeTaskEntries.map(([name, task]) =>
+        task.then((result) => ({ ...result, settledBy: name }))
+      )
+    );
+
+    providerResults[firstSettled.name] = firstSettled;
+
+    if (firstSettled.error) {
+      console.error(`${firstSettled.name} provider error:`, firstSettled.error);
+    }
+
+    const remainingTasks = activeTaskEntries.filter(
+      ([name]) => name !== firstSettled.name
+    );
+
+    if (firstSettled.answer && remainingTasks.length > 0) {
+      const remainingResults = await Promise.all(
+        remainingTasks.map(async ([name, task]) => {
+          const result = await waitWithTimeout(task, PROVIDER_RACE_GRACE_MS);
+          return result
+            ? result
+            : {
+                name,
+                answer: null,
+                source_links: [],
+                reference_image: null,
+                error: null,
+                latency_ms: null,
+                skipped: true
+              };
+        })
+      );
+
+      for (const result of remainingResults) {
+        providerResults[result.name] = result;
+
+        if (result?.error) {
+          console.error(`${result.name} provider error:`, result.error);
+        }
+      }
+    } else {
+      const remainingResults = await Promise.all(
+        remainingTasks.map(async ([, task]) => task)
+      );
+
+      for (const result of remainingResults) {
+        providerResults[result.name] = result;
+
+        if (result?.error) {
+          console.error(`${result.name} provider error:`, result.error);
+        }
+      }
+    }
+  }
+
+  return providerResults;
+}
+
+function buildProviderResultsList(providersUsed, providerResults, normalizedQuery, queryType) {
+  return providersUsed.map((provider) => {
+    const result = providerResults[provider.name];
+    const answer = result?.answer || null;
+    const sourceLinks = result?.source_links || [];
+
+    return {
+      provider: provider.name,
+      label: provider.label,
+      answer,
+      source_links: sourceLinks,
+      reference_image: result?.reference_image || null,
+      score: scoreAnswer({
+        answer,
+        sourceLinks,
+        query: normalizedQuery,
+        queryType
+      })
+    };
+  });
+}
+
 export default async function handler(req, res) {
   const requestStart = Date.now();
 
@@ -2166,7 +2581,10 @@ export default async function handler(req, res) {
   }
 
   const queryType = classifyQuery(normalizedQuery);
+  const queryDifficulty = estimateQueryDifficulty(normalizedQuery, queryType);
+
   await incrementMetric("request_by_query_type", queryType, 1);
+  await incrementMetric("request_by_difficulty", queryDifficulty, 1);
 
   const queryBurstFingerprint = crypto
     .createHash("sha256")
@@ -2211,13 +2629,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v24:${normalizedQuery}`;
+  const cacheKey = `search:v25:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
     : "";
   const semanticKey = semanticFingerprint
-    ? `semantic:v10:${semanticFingerprint}`
+    ? `semantic:v11:${semanticFingerprint}`
     : "";
 
   try {
@@ -2271,6 +2689,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         ...missResponse,
+        query_difficulty: queryDifficulty,
         request_queued: Boolean(queueMeta),
         request_queue_count: queueMeta?.count || 0,
         first_requested_at: queueMeta?.first_requested_at || null,
@@ -2300,10 +2719,19 @@ export default async function handler(req, res) {
       available: false
     }));
 
-    const selectedProviders = chooseProvidersForQuery(queryType, providerConfigs);
-    const installedProviders = selectedProviders.filter((provider) => provider.enabled);
+    const routePlan = buildRoutePlan({
+      query: normalizedQuery,
+      queryType,
+      difficulty: queryDifficulty,
+      providers: providerConfigs
+    });
 
-    if (installedProviders.length === 0) {
+    const { initialProviders, expansionProviders } = selectProvidersForRoutePlan(
+      routePlan,
+      providerConfigs
+    );
+
+    if (initialProviders.length === 0) {
       await incrementMetricDual("no_provider_configured");
       return res.status(500).json({
         answer: "No AI providers are configured.",
@@ -2311,122 +2739,80 @@ export default async function handler(req, res) {
       });
     }
 
-    await trackProviderSelection(installedProviders.map((item) => item.name));
+    await trackProviderSelection(initialProviders.map((item) => item.name));
+    await incrementMetric("route_mode_used", routePlan.route_mode, 1);
+    await incrementMetric("initial_panel_size_used", String(initialProviders.length), 1);
 
-    const allCooling =
-      installedProviders.length > 0 &&
-      installedProviders.every((provider) => provider.cooling);
+    const initialResults = await executeProviderPanel(initialProviders, normalizedQuery);
+    let providerResults = { ...initialResults };
+    let providersUsed = [...initialProviders];
 
-    installedProviders.forEach((provider) => {
-      provider.available = allCooling || !provider.cooling;
+    let providerResultsList = buildProviderResultsList(
+      providersUsed,
+      providerResults,
+      normalizedQuery,
+      queryType
+    );
+    let validProviderAnswers = providerResultsList.filter((item) => item.answer);
+    let sourceLinks = dedupeSourceLinks(
+      validProviderAnswers.flatMap((item) => item.source_links || [])
+    );
+
+    let initialCritique = null;
+
+    if (validProviderAnswers.length >= 2) {
+      initialCritique = await critiqueProviderAnswers(
+        normalizedQuery,
+        validProviderAnswers,
+        queryType
+      );
+    }
+
+    const expandNow = shouldExpandPanel({
+      routePlan,
+      critique: initialCritique,
+      validProviderAnswers,
+      sourceLinks,
+      remainingExpansionCount: expansionProviders.length
     });
 
-    const delays = chooseProviderDelays(installedProviders);
+    let expansionUsed = false;
+    let expansionProvidersUsed = [];
 
-    const providerTasks = {};
-    const providerResults = {};
-
-    for (const provider of installedProviders) {
-      if (provider.available) {
-        providerTasks[provider.name] = callProviderWithTracking(
-          provider.name,
-          normalizedQuery,
-          PROVIDER_CALLS[provider.name],
-          delays[provider.name] || 0
-        );
-      } else {
-        providerResults[provider.name] = {
-          name: provider.name,
-          answer: null,
-          source_links: [],
-          reference_image: null,
-          error: new Error("Provider cooling down"),
-          latency_ms: null,
-          skipped: true
-        };
-      }
-    }
-
-    const activeTaskEntries = Object.entries(providerTasks);
-
-    if (activeTaskEntries.length > 0) {
-      const firstSettled = await Promise.race(
-        activeTaskEntries.map(([name, task]) =>
-          task.then((result) => ({ ...result, settledBy: name }))
-        )
+    if (expandNow && expansionProviders.length > 0) {
+      const expansionTargetCount = Math.min(
+        expansionProviders.length,
+        Math.max(1, routePlan.max_panel_size - initialProviders.length)
       );
 
-      providerResults[firstSettled.name] = firstSettled;
+      expansionProvidersUsed = expansionProviders.slice(0, expansionTargetCount);
 
-      if (firstSettled.error) {
-        console.error(`${firstSettled.name} provider error:`, firstSettled.error);
-      }
+      await trackProviderSelection(expansionProvidersUsed.map((item) => item.name));
+      await incrementMetricDual("panel_expanded");
 
-      const remainingTasks = activeTaskEntries.filter(
-        ([name]) => name !== firstSettled.name
+      const expansionResults = await executeProviderPanel(
+        expansionProvidersUsed,
+        normalizedQuery
       );
 
-      if (firstSettled.answer && remainingTasks.length > 0) {
-        const remainingResults = await Promise.all(
-          remainingTasks.map(async ([name, task]) => {
-            const result = await waitWithTimeout(task, PROVIDER_RACE_GRACE_MS);
-            return result
-              ? result
-              : {
-                  name,
-                  answer: null,
-                  source_links: [],
-                  reference_image: null,
-                  error: null,
-                  latency_ms: null,
-                  skipped: true
-                };
-          })
-        );
-
-        for (const result of remainingResults) {
-          providerResults[result.name] = result;
-
-          if (result?.error) {
-            console.error(`${result.name} provider error:`, result.error);
-          }
-        }
-      } else {
-        const remainingResults = await Promise.all(
-          remainingTasks.map(async ([, task]) => task)
-        );
-
-        for (const result of remainingResults) {
-          providerResults[result.name] = result;
-
-          if (result?.error) {
-            console.error(`${result.name} provider error:`, result.error);
-          }
-        }
-      }
-    }
-
-    const providerResultsList = installedProviders.map((provider) => {
-      const result = providerResults[provider.name];
-      const answer = result?.answer || null;
-      const sourceLinks = result?.source_links || [];
-
-      return {
-        provider: provider.name,
-        label: provider.label,
-        answer,
-        source_links: sourceLinks,
-        reference_image: result?.reference_image || null,
-        score: scoreAnswer({
-          answer,
-          sourceLinks,
-          query: normalizedQuery,
-          queryType
-        })
+      providerResults = {
+        ...providerResults,
+        ...expansionResults
       };
-    });
 
-    const validProviderAnswers = providerResultsList.filter((item) => item.answer);
+      providersUsed = [...initialProviders, ...expansionProvidersUsed];
+      providerResultsList = buildProviderResultsList(
+        providersUsed,
+        providerResults,
+        normalizedQuery,
+        queryType
+      );
+      validProviderAnswers = providerResultsList.filter((item) => item.answer);
+      sourceLinks = dedupeSourceLinks(
+        validProviderAnswers.flatMap((item) => item.source_links || [])
+      );
+      expansionUsed = true;
+    }
 
     let finalAnswer = null;
     let provider = "chiron-nexus";
@@ -2437,9 +2823,6 @@ export default async function handler(req, res) {
     let critique = null;
 
     const sources = validProviderAnswers.map((item) => item.label);
-    const sourceLinks = dedupeSourceLinks(
-      validProviderAnswers.flatMap((item) => item.source_links || [])
-    );
 
     if (validProviderAnswers.length >= 2) {
       critique = await critiqueProviderAnswers(
@@ -2448,13 +2831,13 @@ export default async function handler(req, res) {
         queryType
       );
 
-      if (critique?.needs_synthesis) {
+      if (critique?.needs_synthesis || routePlan.allow_synthesis) {
         finalAnswer = await synthesizeWithOpenAI(
           normalizedQuery,
           validProviderAnswers,
           critique
         );
-        confidence = critique.confidence || confidence;
+        confidence = critique?.confidence || confidence;
       } else if (critique?.winner) {
         const winner = validProviderAnswers.find(
           (item) => item.provider === critique.winner
@@ -2473,7 +2856,10 @@ export default async function handler(req, res) {
         }
       }
 
-      if (!finalAnswer && shouldSkipSynthesis(validProviderAnswers.map((item) => item.answer))) {
+      if (
+        !finalAnswer &&
+        shouldSkipSynthesis(validProviderAnswers.map((item) => item.answer))
+      ) {
         const directWinner = pickBestDirectAnswer(
           validProviderAnswers.map((item) => ({
             provider: item.provider,
@@ -2543,6 +2929,13 @@ export default async function handler(req, res) {
       provider,
       confidence,
       query_type: queryType,
+      query_difficulty: queryDifficulty,
+      route_mode: routePlan.route_mode,
+      panel_size_initial: initialProviders.length,
+      panel_size_final: providersUsed.length,
+      panel_expanded: expansionUsed,
+      initial_providers: initialProviders.map((item) => item.name),
+      expansion_providers: expansionProvidersUsed.map((item) => item.name),
       consensus_level: critique?.consensus_level || null,
       arbitration_reason: critique?.reason || null,
       outlier_providers: critique?.outliers || [],
