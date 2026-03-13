@@ -7,18 +7,17 @@
 
   <style>
     :root {
-      --bg: #020617;
-      --bg-soft: #0f172a;
-      --panel: rgba(15, 23, 42, 0.82);
-      --panel-2: rgba(30, 41, 59, 0.78);
-      --border: rgba(148, 163, 184, 0.18);
-      --border-strong: rgba(148, 163, 184, 0.28);
+      --bg: #030611;
+      --bg-2: #090d18;
+      --panel: rgba(13, 19, 35, 0.82);
+      --panel-2: rgba(23, 31, 52, 0.76);
+      --border: rgba(148, 163, 184, 0.16);
+      --border-strong: rgba(148, 163, 184, 0.26);
       --text: #f8fafc;
       --muted: #cbd5e1;
       --muted-2: #94a3b8;
-      --blue: #3b82f6;
-      --blue-2: #2563eb;
-      --blue-glow: rgba(59, 130, 246, 0.28);
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+
       --green-bg: rgba(22, 101, 52, 0.25);
       --green-text: #dcfce7;
       --amber-bg: rgba(146, 64, 14, 0.28);
@@ -27,21 +26,21 @@
       --red-text: #fee2e2;
       --neutral-bg: rgba(71, 85, 105, 0.45);
       --neutral-text: #e2e8f0;
-      --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-      --radius-xl: 24px;
-      --radius-lg: 18px;
-      --radius-md: 14px;
-      --max-width: 1100px;
-      --purple: #a855f7;
-      --purple-soft: rgba(168, 85, 247, 0.16);
-      --purple-glow: rgba(168, 85, 247, 0.32);
 
-      --hero-bg-top: rgba(18, 13, 28, 0.92);
-      --hero-bg-bottom: rgba(10, 10, 14, 0.92);
-      --hero-violet: #c8b4ff;
-      --hero-violet-soft: rgba(200, 180, 255, 0.18);
-      --hero-violet-line: rgba(210, 190, 255, 0.72);
-      --hero-violet-faint: rgba(180, 150, 255, 0.28);
+      --purple-1: #c4b5fd;
+      --purple-2: #a78bfa;
+      --purple-3: #8b5cf6;
+      --purple-4: #6d28d9;
+
+      --hero-top: rgba(14, 10, 25, 0.96);
+      --hero-bottom: rgba(8, 10, 18, 0.96);
+
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+
+      --max-width: 1280px;
+      --hero-max-width: 1320px;
     }
 
     * {
@@ -54,13 +53,13 @@
 
     body {
       margin: 0;
+      min-height: 100vh;
       font-family: Inter, Arial, sans-serif;
       color: var(--text);
       background:
-        radial-gradient(circle at top left, rgba(37, 99, 235, 0.10), transparent 24%),
-        radial-gradient(circle at top right, rgba(168, 85, 247, 0.10), transparent 22%),
-        linear-gradient(180deg, #05070d 0%, #0a0d16 48%, #05070d 100%);
-      min-height: 100vh;
+        radial-gradient(circle at 15% 10%, rgba(59, 130, 246, 0.10), transparent 20%),
+        radial-gradient(circle at 85% 10%, rgba(168, 85, 247, 0.09), transparent 18%),
+        linear-gradient(180deg, #030611 0%, #080c17 45%, #04070f 100%);
     }
 
     a {
@@ -75,11 +74,11 @@
 
     .page {
       width: 100%;
-      padding: 26px 18px 80px;
+      padding: 24px 20px 80px;
     }
 
     .container {
-      max-width: var(--max-width);
+      max-width: var(--hero-max-width);
       margin: 0 auto;
     }
 
@@ -88,55 +87,32 @@
     .hero {
       position: relative;
       overflow: hidden;
-      min-height: 760px;
+      min-height: 860px;
       background:
-        linear-gradient(180deg, var(--hero-bg-top), var(--hero-bg-bottom));
+        radial-gradient(circle at 50% 16%, rgba(196, 181, 253, 0.06), transparent 20%),
+        radial-gradient(circle at 77% 46%, rgba(139, 92, 246, 0.05), transparent 18%),
+        linear-gradient(180deg, var(--hero-top), var(--hero-bottom));
       border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 32px;
-      padding: 26px 28px 34px;
+      border-radius: 34px;
+      padding: 28px 30px 40px;
       box-shadow: var(--shadow);
       backdrop-filter: blur(14px);
       margin-bottom: 28px;
       isolation: isolate;
     }
 
-    .hero::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background:
-        radial-gradient(circle at 50% 18%, rgba(205, 186, 255, 0.08), transparent 26%),
-        radial-gradient(circle at 78% 48%, rgba(168, 85, 247, 0.06), transparent 24%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
     .hero::after {
       content: "";
       position: absolute;
       inset: 0;
-      opacity: 0.16;
-      pointer-events: none;
       z-index: 0;
+      pointer-events: none;
+      opacity: 0.14;
       background-image:
-        radial-gradient(circle at 20% 20%, rgba(255,255,255,0.05) 0 1px, transparent 1px),
-        radial-gradient(circle at 80% 70%, rgba(255,255,255,0.03) 0 1px, transparent 1px),
-        linear-gradient(rgba(255,255,255,0.02), rgba(255,255,255,0.02));
-      background-size: 170px 170px, 220px 220px, 100% 100%;
-      mix-blend-mode: soft-light;
-    }
-
-    .leather-overlay {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0.18;
-      background:
         repeating-linear-gradient(
           90deg,
-          rgba(255,255,255,0.012) 0px,
-          rgba(255,255,255,0.012) 1px,
+          rgba(255,255,255,0.01) 0px,
+          rgba(255,255,255,0.01) 1px,
           transparent 1px,
           transparent 11px
         ),
@@ -152,34 +128,34 @@
 
     .hero-topbar {
       position: relative;
-      z-index: 5;
+      z-index: 6;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      gap: 18px;
-      margin-bottom: 8px;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
     }
 
     .hero-brand {
       display: inline-flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       min-width: 0;
     }
 
     .hero-brand-icon {
-      width: 50px;
-      height: 50px;
+      width: 56px;
+      height: 56px;
       border-radius: 16px;
       overflow: hidden;
       flex-shrink: 0;
       display: grid;
       place-items: center;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
       box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.02),
-        0 10px 25px rgba(0,0,0,0.20);
+        inset 0 1px 0 rgba(255,255,255,0.03),
+        0 10px 24px rgba(0,0,0,0.18);
     }
 
     .hero-brand-icon img {
@@ -196,55 +172,55 @@
     }
 
     .hero-brand-name {
-      font-size: 17px;
+      font-size: 18px;
       font-weight: 700;
       letter-spacing: -0.02em;
       color: #f5f3fb;
+      white-space: nowrap;
     }
 
     .hero-topbar-right {
       display: flex;
       align-items: center;
+      justify-content: flex-end;
       gap: 10px;
       flex-wrap: wrap;
-      justify-content: flex-end;
     }
 
     .hero-access-pill {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
       min-height: 42px;
       padding: 0 14px;
       border-radius: 999px;
       border: 1px solid rgba(255,255,255,0.12);
       background: rgba(255,255,255,0.04);
-      color: #e9e2f8;
+      color: #e8e2f8;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 800;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.02),
-        0 10px 24px rgba(0,0,0,0.10);
+        0 8px 20px rgba(0,0,0,0.10);
     }
 
     .hero-access-pill.public {
-      border-color: rgba(148, 163, 184, 0.14);
-      background: rgba(51, 65, 85, 0.30);
+      background: rgba(51, 65, 85, 0.34);
       color: #e2e8f0;
+      border-color: rgba(148, 163, 184, 0.14);
     }
 
     .hero-access-pill.paid {
-      border-color: rgba(96, 165, 250, 0.20);
       background: rgba(29, 78, 216, 0.22);
       color: #dbeafe;
+      border-color: rgba(96, 165, 250, 0.18);
     }
 
     .hero-access-pill.admin {
-      border-color: rgba(196, 181, 253, 0.24);
-      background: rgba(109, 40, 217, 0.22);
+      background: rgba(109, 40, 217, 0.24);
       color: #f3e8ff;
+      border-color: rgba(196, 181, 253, 0.22);
     }
 
     .auth-controls {
@@ -258,8 +234,8 @@
     .auth-chip-button {
       appearance: none;
       border: 1px solid rgba(255,255,255,0.14);
-      background: rgba(255,255,255,0.02);
-      color: #f3effc;
+      background: rgba(255,255,255,0.03);
+      color: #f5f0ff;
       min-height: 42px;
       padding: 10px 16px;
       border-radius: 999px;
@@ -275,23 +251,24 @@
     .signin-button:hover,
     .auth-chip-button:hover {
       transform: translateY(-1px);
-      border-color: rgba(200, 180, 255, 0.24);
+      border-color: rgba(200, 180, 255, 0.26);
     }
 
     .auth-chip-button {
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      background: rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.05);
+      max-width: 280px;
     }
 
     .auth-avatar {
-      width: 26px;
-      height: 26px;
+      width: 28px;
+      height: 28px;
       border-radius: 999px;
       display: grid;
       place-items: center;
-      background: rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.11);
       color: #fff;
       font-size: 12px;
       font-weight: 800;
@@ -306,14 +283,17 @@
     }
 
     .auth-chip-name {
-      max-width: 170px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      max-width: 150px;
     }
 
     .auth-tier-badge {
-      padding: 5px 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
       border-radius: 999px;
       font-size: 11px;
       font-weight: 800;
@@ -321,13 +301,14 @@
       text-transform: uppercase;
       border: 1px solid rgba(255,255,255,0.10);
       background: rgba(255,255,255,0.06);
-      color: #efe9fb;
+      color: #f0eaff;
+      flex-shrink: 0;
     }
 
     .auth-tier-badge.paid {
-      background: rgba(29, 78, 216, 0.24);
+      background: rgba(29, 78, 216, 0.22);
       color: #dbeafe;
-      border-color: rgba(96, 165, 250, 0.20);
+      border-color: rgba(96, 165, 250, 0.18);
     }
 
     .auth-tier-badge.admin {
@@ -339,26 +320,26 @@
     .hero-stage {
       position: relative;
       z-index: 2;
-      min-height: 650px;
+      min-height: 730px;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 14px 0 0;
+      padding-top: 8px;
     }
 
     .embossed-chiron {
       position: absolute;
-      top: 92px;
+      top: 130px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: clamp(52px, 8.5vw, 104px);
+      font-size: clamp(78px, 11vw, 160px);
       font-weight: 800;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.10em;
       text-transform: uppercase;
-      color: rgba(0, 0, 0, 0.22);
+      color: rgba(0, 0, 0, 0.14);
       text-shadow:
         0 1px 0 rgba(255,255,255,0.02),
-        0 -1px 0 rgba(0,0,0,0.20);
+        0 -1px 0 rgba(0,0,0,0.12);
       pointer-events: none;
       user-select: none;
       white-space: nowrap;
@@ -368,10 +349,10 @@
     .centaur-watermark {
       position: absolute;
       left: 5%;
-      top: 162px;
-      width: min(300px, 31vw);
-      opacity: 0.09;
-      filter: grayscale(1) brightness(0.72) contrast(1.02);
+      top: 220px;
+      width: min(340px, 25vw);
+      opacity: 0.07;
+      filter: grayscale(1) brightness(0.74) contrast(1.02);
       pointer-events: none;
       user-select: none;
       z-index: 1;
@@ -386,48 +367,48 @@
 
     .hero-content {
       position: relative;
-      z-index: 4;
+      z-index: 5;
       width: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
       text-align: center;
-      padding-top: 8px;
+      padding-top: 24px;
     }
 
     .nexus-title {
       margin: 0;
-      font-size: clamp(64px, 10vw, 82px);
-      line-height: 0.96;
-      letter-spacing: -0.04em;
+      font-size: clamp(88px, 12vw, 128px);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
       font-weight: 700;
-      color: #f6f3fb;
-      text-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      color: #f7f4fb;
+      text-shadow: 0 10px 28px rgba(0,0,0,0.20);
     }
 
     .nexus-subtitle {
-      margin-top: 14px;
-      font-size: clamp(15px, 1.8vw, 18px);
-      line-height: 1.4;
-      color: #e5e0f1;
+      margin-top: 18px;
+      font-size: clamp(20px, 2vw, 24px);
+      line-height: 1.35;
+      color: #e7e2f3;
       font-weight: 500;
       letter-spacing: -0.01em;
     }
 
     .nexus-description {
-      margin-top: 10px;
-      font-size: clamp(13px, 1.45vw, 14px);
-      line-height: 1.55;
-      color: #c9c0db;
-      max-width: 620px;
+      margin-top: 14px;
+      font-size: clamp(15px, 1.35vw, 17px);
+      line-height: 1.6;
+      color: #cabfdd;
+      max-width: 720px;
       letter-spacing: -0.01em;
     }
 
     .search-orbit-wrap {
       position: relative;
-      width: min(980px, 96vw);
-      height: 320px;
-      margin-top: 16px;
+      width: min(1120px, 95vw);
+      height: 360px;
+      margin-top: 26px;
       display: grid;
       place-items: center;
     }
@@ -445,7 +426,7 @@
     .search-shell {
       position: relative;
       z-index: 4;
-      width: min(740px, 88vw);
+      width: min(860px, 90vw);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -457,14 +438,14 @@
       display: flex;
       align-items: stretch;
       background:
-        linear-gradient(180deg, rgba(18, 12, 28, 0.96), rgba(22, 16, 34, 0.92));
+        linear-gradient(180deg, rgba(19, 13, 31, 0.96), rgba(24, 18, 38, 0.94));
       border: 1px solid rgba(220, 205, 255, 0.10);
-      border-radius: 24px;
+      border-radius: 26px;
       overflow: hidden;
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.03),
-        0 12px 32px rgba(0,0,0,0.34),
-        0 0 20px rgba(168, 85, 247, 0.10);
+        0 14px 34px rgba(0,0,0,0.34),
+        0 0 18px rgba(168, 85, 247, 0.06);
       backdrop-filter: blur(8px);
     }
 
@@ -472,21 +453,20 @@
       border-color: rgba(220, 205, 255, 0.18);
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.03),
-        0 12px 32px rgba(0,0,0,0.34),
-        0 0 0 4px rgba(168, 85, 247, 0.06),
-        0 0 22px rgba(168, 85, 247, 0.12);
+        0 14px 34px rgba(0,0,0,0.34),
+        0 0 0 4px rgba(168, 85, 247, 0.05);
     }
 
     .search-input {
       flex: 1;
       min-width: 0;
-      height: 72px;
-      padding: 0 24px;
+      height: 80px;
+      padding: 0 26px;
       background: transparent;
       border: none;
       outline: none;
       color: #f4effb;
-      font-size: 18px;
+      font-size: 19px;
       letter-spacing: -0.01em;
     }
 
@@ -495,13 +475,13 @@
     }
 
     .search-button {
-      width: 92px;
+      width: 94px;
       border: none;
       border-left: 1px solid rgba(255,255,255,0.06);
       cursor: pointer;
       color: #f7f4ff;
       background:
-        linear-gradient(180deg, rgba(190, 166, 255, 0.22), rgba(124, 92, 255, 0.20));
+        linear-gradient(180deg, rgba(190, 166, 255, 0.20), rgba(124, 92, 255, 0.18));
       display: grid;
       place-items: center;
       transition: background 0.18s ease, opacity 0.18s ease;
@@ -509,7 +489,7 @@
 
     .search-button:hover {
       background:
-        linear-gradient(180deg, rgba(198, 180, 255, 0.30), rgba(124, 92, 255, 0.26));
+        linear-gradient(180deg, rgba(198, 180, 255, 0.26), rgba(124, 92, 255, 0.22));
     }
 
     .search-button:disabled {
@@ -523,22 +503,22 @@
     }
 
     .search-helper {
-      min-height: 22px;
-      color: #b8afcd;
+      min-height: 24px;
+      color: #b9b0cd;
       font-size: 13px;
+      line-height: 1.5;
       letter-spacing: -0.01em;
-      line-height: 1.45;
     }
 
     .search-helper strong {
-      color: #ece6fb;
+      color: #eee8fb;
       font-weight: 600;
     }
 
     .powered-by-chiron {
       position: absolute;
-      bottom: 22px;
       left: 50%;
+      bottom: 24px;
       transform: translateX(-50%);
       z-index: 4;
       text-align: center;
@@ -548,30 +528,32 @@
     }
 
     .powered-by-chiron strong {
-      color: #e7e1f4;
+      color: #ebe5f8;
       font-weight: 600;
     }
 
-    /* LOWER PANELS */
+    /* PANELS */
 
     .grid {
+      max-width: var(--max-width);
+      margin: 0 auto;
       display: grid;
-      grid-template-columns: 1.35fr 0.85fr;
-      gap: 22px;
+      grid-template-columns: 1.45fr 0.95fr;
+      gap: 24px;
       align-items: start;
     }
 
     .column {
       display: flex;
       flex-direction: column;
-      gap: 22px;
+      gap: 24px;
     }
 
     .panel {
       background: linear-gradient(180deg, var(--panel), var(--panel-2));
       border: 1px solid var(--border);
       border-radius: var(--radius-xl);
-      padding: 24px;
+      padding: 28px;
       box-shadow: var(--shadow);
       backdrop-filter: blur(14px);
     }
@@ -590,24 +572,25 @@
 
     .panel h2 {
       margin: 0;
-      font-size: 22px;
-      letter-spacing: -0.02em;
+      font-size: 30px;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
     }
 
     .panel-subtitle {
-      margin-top: 6px;
+      margin-top: 8px;
       color: var(--muted-2);
       font-size: 14px;
-      line-height: 1.5;
+      line-height: 1.55;
     }
 
     .status-badge {
       flex-shrink: 0;
       border-radius: 999px;
-      padding: 9px 12px;
+      padding: 10px 13px;
       font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
+      font-weight: 800;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
       border: 1px solid rgba(168, 85, 247, 0.18);
       background: rgba(168, 85, 247, 0.12);
@@ -651,9 +634,9 @@
     }
 
     .answer-text {
-      color: #e5edf8;
-      line-height: 1.78;
-      font-size: 16px;
+      color: #e7edf8;
+      line-height: 1.82;
+      font-size: 17px;
       word-break: break-word;
     }
 
@@ -680,7 +663,7 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 11px 14px;
+      padding: 12px 15px;
       border-radius: 999px;
       font-size: 14px;
       border: 1px solid transparent;
@@ -766,21 +749,21 @@
     .sources-note {
       color: var(--muted-2);
       font-size: 13px;
-      line-height: 1.5;
+      line-height: 1.55;
     }
 
     .mini-stats {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 18px;
+      gap: 14px;
+      margin-top: 20px;
     }
 
     .stat-card {
       background: rgba(2, 6, 23, 0.42);
       border: 1px solid var(--border);
       border-radius: 18px;
-      padding: 16px;
+      padding: 18px;
     }
 
     .stat-label {
@@ -790,21 +773,23 @@
     }
 
     .stat-value {
-      font-size: 18px;
+      font-size: 22px;
       font-weight: 700;
       color: var(--text);
       word-break: break-word;
+      line-height: 1.2;
     }
 
     .footer-note {
-      margin-top: 16px;
+      margin-top: 18px;
       color: var(--muted-2);
       font-size: 13px;
-      line-height: 1.55;
+      line-height: 1.6;
     }
 
     .site-footer {
-      margin-top: 24px;
+      max-width: var(--max-width);
+      margin: 26px auto 0;
       text-align: center;
       color: #94a3b8;
       font-size: 13px;
@@ -812,44 +797,39 @@
       padding: 0 8px;
     }
 
-    @media (max-width: 920px) {
+    @media (max-width: 1100px) {
       .grid {
         grid-template-columns: 1fr;
       }
 
       .hero {
-        min-height: 700px;
-        padding: 20px;
-        border-radius: 26px;
+        min-height: 790px;
       }
 
       .centaur-watermark {
-        left: 2%;
-        top: 182px;
-        width: min(220px, 28vw);
-        opacity: 0.075;
-      }
-
-      .embossed-chiron {
-        top: 102px;
-        font-size: clamp(42px, 10vw, 82px);
+        width: min(240px, 25vw);
+        top: 250px;
+        opacity: 0.06;
       }
 
       .search-orbit-wrap {
-        width: 96vw;
-        height: 290px;
+        height: 320px;
       }
     }
 
-    @media (max-width: 640px) {
+    @media (max-width: 780px) {
       .page {
-        padding: 14px 12px 42px;
+        padding: 16px 14px 44px;
       }
 
       .hero,
       .panel {
-        padding: 18px;
-        border-radius: 20px;
+        padding: 20px;
+      }
+
+      .hero {
+        min-height: 700px;
+        border-radius: 24px;
       }
 
       .hero-topbar {
@@ -861,60 +841,65 @@
         justify-content: flex-start;
       }
 
+      .hero-brand-icon {
+        width: 48px;
+        height: 48px;
+      }
+
       .hero-brand-name {
         font-size: 15px;
       }
 
-      .signin-button,
-      .auth-chip-button {
-        font-size: 14px;
-      }
-
-      .hero {
-        min-height: 650px;
-      }
-
       .embossed-chiron {
-        top: 88px;
-        font-size: clamp(34px, 10vw, 56px);
+        top: 110px;
+        font-size: clamp(50px, 11vw, 90px);
       }
 
       .centaur-watermark {
-        left: -6%;
-        top: 200px;
+        left: -4%;
+        top: 240px;
         width: 170px;
-        opacity: 0.07;
+        opacity: 0.055;
       }
 
       .nexus-title {
-        font-size: clamp(52px, 12vw, 70px);
+        font-size: clamp(66px, 13vw, 90px);
       }
 
       .nexus-subtitle {
-        font-size: 15px;
+        font-size: 18px;
       }
 
       .nexus-description {
-        font-size: 13px;
-        max-width: 90%;
+        font-size: 14px;
+        max-width: 92%;
       }
 
       .search-orbit-wrap {
-        height: 250px;
+        width: 100%;
+        height: 270px;
       }
 
       .search-shell {
-        width: 94vw;
+        width: 100%;
       }
 
       .search-input {
-        height: 62px;
-        font-size: 16px;
+        height: 70px;
+        font-size: 17px;
         padding: 0 18px;
       }
 
       .search-button {
-        width: 76px;
+        width: 78px;
+      }
+
+      .panel h2 {
+        font-size: 24px;
+      }
+
+      .answer-text {
+        font-size: 16px;
       }
 
       .mini-stats {
@@ -922,7 +907,7 @@
       }
 
       .auth-chip-name {
-        max-width: 120px;
+        max-width: 110px;
       }
     }
   </style>
@@ -931,8 +916,6 @@
   <div class="page">
     <div class="container">
       <section class="hero">
-        <div class="leather-overlay"></div>
-
         <div class="hero-topbar">
           <a class="hero-brand" href="#" aria-label="Modman Technologies LLC">
             <div class="hero-brand-icon">
@@ -970,19 +953,19 @@
             </div>
 
             <div class="search-orbit-wrap">
-              <svg class="orbit-svg" viewBox="0 0 980 330" aria-hidden="true">
+              <svg class="orbit-svg" viewBox="0 0 1120 360" aria-hidden="true">
                 <defs>
                   <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="5" result="blur" />
+                    <feGaussianBlur stdDeviation="3" result="blur" />
                     <feMerge>
                       <feMergeNode in="blur" />
                       <feMergeNode in="SourceGraphic" />
                     </feMerge>
                   </filter>
 
-                  <filter id="hardGlow" x="-80%" y="-80%" width="260%" height="260%">
-                    <feGaussianBlur stdDeviation="8" result="blur1" />
-                    <feGaussianBlur stdDeviation="16" result="blur2" />
+                  <filter id="lightGlow" x="-80%" y="-80%" width="260%" height="260%">
+                    <feGaussianBlur stdDeviation="6" result="blur1" />
+                    <feGaussianBlur stdDeviation="10" result="blur2" />
                     <feMerge>
                       <feMergeNode in="blur2" />
                       <feMergeNode in="blur1" />
@@ -992,66 +975,67 @@
                 </defs>
 
                 <path
-                  d="M250 118 C430 95, 620 90, 820 62"
+                  d="M315 150 C480 132, 685 122, 910 86"
                   fill="none"
-                  stroke="rgba(225,214,255,0.34)"
-                  stroke-width="2"
+                  stroke="rgba(225,214,255,0.26)"
+                  stroke-width="1.6"
                   stroke-linecap="round"
                 />
 
                 <path
-                  d="M150 245
-                     C98 272, 104 304, 172 314
-                     C308 334, 550 334, 736 311
-                     C864 295, 931 252, 938 194
-                     C942 170, 938 149, 925 132"
+                  d="M175 270
+                     C135 292, 128 320, 182 330
+                     C312 352, 598 350, 818 328
+                     C955 314, 1042 272, 1054 210
+                     C1060 184, 1056 160, 1042 144"
                   fill="none"
-                  stroke="rgba(220,205,255,0.82)"
-                  stroke-width="4"
-                  stroke-linecap="round"
-                  filter="url(#softGlow)"
-                />
-
-                <path
-                  d="M145 250
-                     C90 290, 116 324, 214 328
-                     C380 335, 610 331, 760 315
-                     C875 302, 928 268, 936 217"
-                  fill="none"
-                  stroke="rgba(168,85,247,0.28)"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  filter="url(#softGlow)"
-                />
-
-                <path
-                  d="M820 62 L928 42"
-                  fill="none"
-                  stroke="rgba(247,242,255,0.94)"
+                  stroke="rgba(220,205,255,0.62)"
                   stroke-width="3"
                   stroke-linecap="round"
-                  filter="url(#hardGlow)"
+                  filter="url(#softGlow)"
                 />
+
+                <path
+                  d="M176 272
+                     C136 302, 154 329, 236 336
+                     C400 348, 650 344, 835 328
+                     C978 315, 1046 282, 1053 226"
+                  fill="none"
+                  stroke="rgba(168,85,247,0.18)"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  filter="url(#softGlow)"
+                />
+
+                <path
+                  d="M910 86 L1035 62"
+                  fill="none"
+                  stroke="rgba(247,242,255,0.86)"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  filter="url(#lightGlow)"
+                />
+
                 <polygon
-                  points="928,42 901,35 912,54"
-                  fill="rgba(250,247,255,0.98)"
-                  filter="url(#hardGlow)"
+                  points="1035,62 1008,55 1018,74"
+                  fill="rgba(250,247,255,0.94)"
+                  filter="url(#lightGlow)"
                 />
 
                 <path
-                  d="M920 128
-                     C948 152, 949 198, 923 226"
+                  d="M1035 147
+                     C1061 169, 1062 212, 1038 238"
                   fill="none"
-                  stroke="rgba(228,220,255,0.8)"
-                  stroke-width="3"
+                  stroke="rgba(228,220,255,0.60)"
+                  stroke-width="2.5"
                   stroke-linecap="round"
                   filter="url(#softGlow)"
                 />
 
-                <circle cx="150" cy="245" r="4.5" fill="rgba(243,234,255,0.9)" filter="url(#hardGlow)" />
-                <circle cx="720" cy="313" r="3.5" fill="rgba(243,234,255,0.82)" filter="url(#hardGlow)" />
-                <circle cx="820" cy="62" r="3.8" fill="rgba(243,234,255,0.9)" filter="url(#hardGlow)" />
-                <circle cx="926" cy="43" r="4.8" fill="rgba(255,247,255,0.98)" filter="url(#hardGlow)" />
+                <circle cx="175" cy="270" r="3.5" fill="rgba(243,234,255,0.72)" filter="url(#lightGlow)" />
+                <circle cx="855" cy="327" r="2.5" fill="rgba(243,234,255,0.62)" filter="url(#softGlow)" />
+                <circle cx="910" cy="86" r="3" fill="rgba(243,234,255,0.72)" filter="url(#lightGlow)" />
+                <circle cx="1034" cy="62" r="3.8" fill="rgba(255,247,255,0.90)" filter="url(#lightGlow)" />
               </svg>
 
               <div class="search-shell">
@@ -1072,7 +1056,7 @@
                 </div>
 
                 <div class="search-helper" id="search-helper">
-                  Public mode is currently <strong>cache-first</strong>. Sign in for live access later.
+                  Public mode is currently <strong>cache-first</strong>. Sign in for live access.
                 </div>
               </div>
             </div>
@@ -1090,17 +1074,17 @@
             <div class="panel-header">
               <div class="panel-title-wrap">
                 <h2>Unified Answer</h2>
-                <div class="panel-subtitle">Preview area for the final synthesized result.</div>
+                <div class="panel-subtitle">Final response area for the Chiron Nexus broker.</div>
               </div>
               <div class="status-badge public" id="status-badge">Public</div>
             </div>
 
             <div class="answer-text answer-placeholder" id="unified-answer">
               <p>
-                Search is currently in development mode.
+                Nexus is ready for authentication integration and backend reconnect.
               </p>
               <p>
-                The UI is ready for phased auth integration and live broker reconnect, but this page is still using temporary frontend behavior.
+                This UI is now structured for real Clerk sign-in, access-aware states, and future live search rendering.
               </p>
             </div>
           </div>
@@ -1111,7 +1095,7 @@
             <div class="panel-header">
               <div class="panel-title-wrap">
                 <h2>Answer Details</h2>
-                <div class="panel-subtitle">Preview of provider, cache, confidence, access, and performance metadata.</div>
+                <div class="panel-subtitle">Provider, cache, confidence, access, and timing metadata.</div>
               </div>
             </div>
 
@@ -1136,7 +1120,7 @@
             </div>
 
             <div class="footer-note" id="details-footer-note">
-              Provider race mode, caching layers, access state, and synthesis metadata will appear here once live search is reconnected.
+              Route mode, caching, access state, and synthesis metadata will render here when backend search is connected.
             </div>
           </div>
 
@@ -1144,7 +1128,7 @@
             <div class="panel-header">
               <div class="panel-title-wrap">
                 <h2>AI Sources</h2>
-                <div class="panel-subtitle">Preview of provider and source output returned by the API.</div>
+                <div class="panel-subtitle">Providers and web/source references returned by the API.</div>
               </div>
             </div>
 
@@ -1152,10 +1136,10 @@
               <div class="source-list" id="ai-sources">
                 <div class="source-pill static">Public</div>
                 <div class="source-pill static">Cache-first</div>
-                <div class="source-pill static">Auth-ready UI</div>
+                <div class="source-pill static">Clerk-ready</div>
               </div>
               <div class="sources-note" id="sources-note">
-                Source links and provider references will render here after authenticated search flow is enabled.
+                Source links and provider references will appear here after search wiring is restored.
               </div>
             </div>
           </div>
@@ -1167,6 +1151,13 @@
       </div>
     </div>
   </div>
+
+  <script
+    async
+    crossorigin="anonymous"
+    data-clerk-publishable-key="pk_test_Z3Jvd24tamVubmV0LTMyLmNsZXJrLmFjY291bnRzLmRldiQ"
+    src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
+  </script>
 
   <script>
     const queryInput = document.getElementById("query");
@@ -1189,6 +1180,8 @@
 
     const statPrimaryProvider = document.getElementById("stat-primary-provider");
     const statAccessTier = document.getElementById("stat-access-tier");
+
+    let clerkLoaded = false;
 
     let authState = {
       isSignedIn: false,
@@ -1215,9 +1208,12 @@
     function getInitials(name) {
       const clean = String(name || "").trim();
       if (!clean) return "CN";
-
-      const parts = clean.split(/\s+/).filter(Boolean).slice(0, 2);
-      return parts.map((part) => part[0].toUpperCase()).join("");
+      return clean
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(part => part[0].toUpperCase())
+        .join("");
     }
 
     function setAuthState(nextState) {
@@ -1244,12 +1240,11 @@
           <button class="signin-button" id="signin-button" type="button">Sign In</button>
         `;
 
-        const signInButton = document.getElementById("signin-button");
-        signInButton?.addEventListener("click", handleSignInClick);
+        document.getElementById("signin-button")?.addEventListener("click", handleSignInClick);
         return;
       }
 
-      const userName = authState.user?.name || "Nexus User";
+      const userName = authState.user?.name || "User";
       const tier = authState.accessTier;
       const tierLabel = formatTierLabel(tier);
 
@@ -1263,39 +1258,42 @@
         </button>
       `;
 
-      const accountButton = document.getElementById("account-button");
-      accountButton?.addEventListener("click", handleAccountClick);
+      document.getElementById("account-button")?.addEventListener("click", handleAccountClick);
     }
 
     function renderAccessTier() {
       const tier = authState.accessTier || "public";
-      const tierLabel = formatTierLabel(tier);
+      const label = formatTierLabel(tier);
 
       heroAccessPill.className = `hero-access-pill ${tier}`;
-      heroAccessPill.textContent = tierLabel;
+      heroAccessPill.textContent = label;
 
-      statusBadge.className = `status-badge ${tier}`;
-      statusBadge.textContent = tierLabel;
+      if (!statusBadge.classList.contains("loading") &&
+          !statusBadge.classList.contains("success") &&
+          !statusBadge.classList.contains("error")) {
+        statusBadge.className = `status-badge ${tier}`;
+        statusBadge.textContent = label;
+      }
 
       pillAccessTier.className = `meta-pill ${tier}`;
-      pillAccessTier.textContent = `Access: ${tierLabel}`;
+      pillAccessTier.textContent = `Access: ${label}`;
 
       statAccessTier.textContent = tier.toUpperCase();
 
       if (tier === "public") {
-        searchHelper.innerHTML = `Public mode is currently <strong>cache-first</strong>. Sign in for live access later.`;
+        searchHelper.innerHTML = `Public mode is currently <strong>cache-first</strong>. Sign in for live access.`;
       } else if (tier === "paid") {
-        searchHelper.innerHTML = `Signed in as <strong>Paid</strong>. Live search UI wiring can be enabled next.`;
+        searchHelper.innerHTML = `Signed in as <strong>Paid</strong>. Live search can be enabled next.`;
       } else {
         searchHelper.innerHTML = `Signed in as <strong>Admin</strong>. Admin testing hooks can be connected next.`;
       }
     }
 
-    function renderDevelopmentAnswer(title, paragraphs = []) {
-      unifiedAnswer.classList.remove("answer-placeholder");
+    function renderMessage(title, paragraphs = [], placeholder = false) {
+      unifiedAnswer.classList.toggle("answer-placeholder", placeholder);
       unifiedAnswer.innerHTML = [
         `<p>${escapeHtml(title)}</p>`,
-        ...paragraphs.map((item) => `<p>${escapeHtml(item)}</p>`)
+        ...paragraphs.map(item => `<p>${escapeHtml(item)}</p>`)
       ].join("");
     }
 
@@ -1316,19 +1314,21 @@
       pillCacheType.textContent = "Cache Type: --";
 
       statPrimaryProvider.textContent = "--";
+
       detailsFooterNote.textContent =
-        "Provider race mode, caching layers, access state, and synthesis metadata will appear here once live search is reconnected.";
+        "Route mode, caching, access state, and synthesis metadata will render here when backend search is connected.";
 
       aiSources.innerHTML = `
         <div class="source-pill static">Public</div>
         <div class="source-pill static">Cache-first</div>
-        <div class="source-pill static">Auth-ready UI</div>
+        <div class="source-pill static">Clerk-ready</div>
       `;
+
       sourcesNote.textContent =
-        "Source links and provider references will render here after authenticated search flow is enabled.";
+        "Source links and provider references will appear here after search wiring is restored.";
     }
 
-    function setLoadingPanelState(query) {
+    function setLoadingState(query) {
       statusBadge.className = "status-badge loading";
       statusBadge.textContent = "Loading";
 
@@ -1353,73 +1353,85 @@
         <div class="source-pill static">Query queued</div>
         <div class="source-pill static">${escapeHtml(formatTierLabel(authState.accessTier))}</div>
       `;
-      sourcesNote.textContent = "Temporary frontend state only.";
-      detailsFooterNote.textContent = "This is currently a local UI state placeholder before real API reconnect.";
 
-      renderDevelopmentAnswer(
+      sourcesNote.textContent = "Temporary frontend state only.";
+      detailsFooterNote.textContent =
+        "This page is still in phase-1 auth integration. Backend rendering comes next.";
+
+      renderMessage(
         `Processing: ${query}`,
         [
-          "This page is still using temporary frontend behavior.",
-          "Next step is connecting authenticated search requests to the backend."
-        ]
+          "This is currently a frontend preview state.",
+          "Next step is connecting authenticated search requests and rendering real backend metadata."
+        ],
+        false
       );
+    }
+
+    function updateAuthFromClerk() {
+      if (!window.Clerk || !Clerk.user) {
+        setAuthState({
+          isSignedIn: false,
+          accessTier: "public",
+          user: null
+        });
+
+        return;
+      }
+
+      const tier = String(Clerk.user?.publicMetadata?.tier || "paid").toLowerCase();
+
+      setAuthState({
+        isSignedIn: true,
+        accessTier: tier,
+        user: {
+          name: Clerk.user.fullName || Clerk.user.firstName || "User"
+        }
+      });
+
+      renderMessage(
+        "Authentication connected.",
+        [
+          "Clerk is active and the interface now reflects real sign-in state.",
+          "Next step is wiring the authenticated user session into backend search requests."
+        ],
+        false
+      );
+    }
+
+    async function initClerk() {
+      if (!window.Clerk) return;
+
+      try {
+        await Clerk.load();
+        clerkLoaded = true;
+
+        updateAuthFromClerk();
+
+        Clerk.addListener(() => {
+          updateAuthFromClerk();
+        });
+      } catch (error) {
+        console.error("Clerk failed to load:", error);
+
+        renderMessage(
+          "Clerk did not finish loading.",
+          [
+            "The page is still usable, but auth controls are temporarily unavailable."
+          ],
+          false
+        );
+      }
     }
 
     function handleSignInClick() {
-      if (!authState.isSignedIn) {
-        setAuthState({
-          isSignedIn: true,
-          accessTier: "paid",
-          user: {
-            name: "Nexus User"
-          }
-        });
-
-        renderDevelopmentAnswer(
-          "Signed in for phase-1 UI testing.",
-          [
-            "The frontend now reflects a signed-in paid account state.",
-            "Backend access enforcement should still remain the source of truth."
-          ]
-        );
-        return;
-      }
+      if (!clerkLoaded || !window.Clerk) return;
+      Clerk.openSignIn();
     }
 
-    function handleAccountClick() {
-      if (authState.accessTier === "paid") {
-        setAuthState({
-          isSignedIn: true,
-          accessTier: "admin",
-          user: {
-            name: "Admin User"
-          }
-        });
-
-        renderDevelopmentAnswer(
-          "Switched to admin preview state.",
-          [
-            "This is a temporary frontend-only admin view for UI testing.",
-            "Real session-backed admin identity should come from auth later."
-          ]
-        );
-        return;
-      }
-
-      setAuthState({
-        isSignedIn: false,
-        accessTier: "public",
-        user: null
-      });
-
-      renderDevelopmentAnswer(
-        "Signed out.",
-        [
-          "The interface is back in public mode.",
-          "Public should remain cache-only until backend-authenticated access is connected."
-        ]
-      );
-      setIdlePanelState();
+    async function handleAccountClick() {
+      if (!clerkLoaded || !window.Clerk) return;
+      await Clerk.signOut();
     }
 
     function goSearch() {
@@ -1427,7 +1439,7 @@
       if (!q) return;
 
       searchButton.disabled = true;
-      setLoadingPanelState(q);
+      setLoadingState(q);
 
       window.setTimeout(() => {
         searchButton.disabled = false;
@@ -1438,26 +1450,29 @@
 
           pillProvider.textContent = "Provider: Chiron Cache";
           pillCached.className = "meta-pill cached-no";
-          pillCached.textContent = "Cached: unknown";
-          pillCacheType.textContent = "Cache Type: preview";
-          pillResponseTime.textContent = "Response Time: local";
+          pillCached.textContent = "Cached: preview";
+          pillCacheType.textContent = "Cache Type: cache-first";
+          pillResponseTime.textContent = "Response Time: pending API";
           statPrimaryProvider.textContent = "Chiron Cache";
 
           aiSources.innerHTML = `
             <div class="source-pill static">Public</div>
             <div class="source-pill static">Cache-only path</div>
-            <div class="source-pill static">Auth required for live</div>
+            <div class="source-pill static">Upgrade required for live</div>
           `;
-          sourcesNote.textContent =
-            "Public mode is prepared to align with backend cache-only behavior.";
 
-          renderDevelopmentAnswer(
-            `Search preview for "${q}"`,
+          sourcesNote.textContent =
+            "Public mode is aligned to future backend cache-only behavior.";
+
+          renderMessage(
+            `Public preview for "${q}"`,
             [
-              "This public UI state is currently a placeholder.",
-              "When the backend is connected, public users should receive cached responses or a cache-miss / upgrade-required result."
-            ]
+              "This is a temporary public-mode placeholder.",
+              "Once backend search is connected, public users should receive cached results or a cache-miss / upgrade-required response."
+            ],
+            false
           );
+
           return;
         }
 
@@ -1468,10 +1483,8 @@
         pillConfidence.textContent = "Confidence: preview";
 
         pillProvider.textContent = "Provider: Chiron Nexus";
-
         pillCached.className = "meta-pill cached-no";
         pillCached.textContent = "Cached: preview";
-
         pillResponseTime.textContent = "Response Time: pending API";
         pillCacheType.textContent = "Cache Type: live-path";
         statPrimaryProvider.textContent = "Chiron Nexus";
@@ -1481,19 +1494,22 @@
           <div class="source-pill static">Live path ready</div>
           <div class="source-pill static">${escapeHtml(formatTierLabel(authState.accessTier))}</div>
         `;
-        sourcesNote.textContent =
-          "This signed-in UI state is ready for authenticated backend wiring.";
-        detailsFooterNote.textContent =
-          "Next step: connect goSearch() to the real search endpoint and let backend enforce PUBLIC / PAID / ADMIN.";
 
-        renderDevelopmentAnswer(
-          `Authenticated search preview for "${q}"`,
+        sourcesNote.textContent =
+          "This signed-in state is ready for authenticated backend wiring.";
+
+        detailsFooterNote.textContent =
+          "Next step: connect goSearch() to /api/search and let backend enforce PUBLIC / PAID / ADMIN.";
+
+        renderMessage(
+          `Authenticated preview for "${q}"`,
           [
-            "The frontend correctly reflects signed-in access.",
-            "The next implementation step is sending real authenticated requests to search.js and rendering returned metadata."
-          ]
+            "The UI is now reflecting real sign-in state through Clerk.",
+            "The next implementation step is sending real authenticated requests to the search endpoint and rendering returned metadata."
+          ],
+          false
         );
-      }, 350);
+      }, 450);
     }
 
     queryInput.addEventListener("keydown", (event) => {
@@ -1507,6 +1523,7 @@
     renderAuthUI();
     renderAccessTier();
     setIdlePanelState();
+    initClerk();
   </script>
 </body>
 </html>
