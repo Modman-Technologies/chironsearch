@@ -472,8 +472,17 @@ async function trackProviderSelection(providerNames = []) {
   );
 }
 
+/*
+  Access model:
+  - PUBLIC: default, cache-only
+  - PAID: must come from verified session/user identity (not implemented yet here)
+  - ADMIN: temporary secure testing override via CHIRON_ADMIN_KEY
+
+  IMPORTANT:
+  - Client-supplied "paid" headers are no longer trusted.
+  - Until real auth/session lookup is added, all non-admin requests default to PUBLIC.
+*/
 function getLiveAccessMode(req) {
-  const explicitAccess = getHeader(req, "x-chiron-access").toLowerCase().trim();
   const adminKeyHeader = getHeader(req, "x-chiron-admin-key");
   const adminKeyEnv = process.env.CHIRON_ADMIN_KEY || "";
 
@@ -481,9 +490,13 @@ function getLiveAccessMode(req) {
     return ACCESS_TIERS.ADMIN;
   }
 
-  if (explicitAccess === ACCESS_TIERS.PAID) {
-    return ACCESS_TIERS.PAID;
-  }
+  /*
+    TODO: Replace this block with verified session/user lookup.
+    Example future logic:
+    - if no verified session => PUBLIC
+    - if verified signed-in user => PAID
+    - if verified admin user => ADMIN
+  */
 
   return ACCESS_TIERS.PUBLIC;
 }
@@ -493,7 +506,7 @@ function isLiveSearchAllowed(accessTier) {
 }
 
 function shouldForceLiveSearch(req, accessTier) {
-  if (!isLiveSearchAllowed(accessTier)) {
+  if (accessTier !== ACCESS_TIERS.ADMIN) {
     return false;
   }
 
@@ -1178,7 +1191,7 @@ function estimateQueryDifficulty(query = "", queryType = "general") {
   return "hard";
 }
 
-function buildRoutePlan({ query, queryType, difficulty, providers }) {
+function buildRoutePlan({ queryType, difficulty, providers }) {
   const enabledProviders = providers.filter((provider) => provider.enabled);
   const enabledCount = enabledProviders.length;
 
@@ -1349,7 +1362,6 @@ function selectProvidersForRoutePlan(routePlan, providers) {
 
 function shouldExpandPanel({
   routePlan,
-  critique,
   validProviderAnswers,
   sourceLinks,
   remainingExpansionCount
@@ -1366,11 +1378,22 @@ function shouldExpandPanel({
     return true;
   }
 
-  if (critique?.consensus_level === "low") {
+  const confidence = getConfidenceFromAnswers(
+    validProviderAnswers.map((item) => item.answer)
+  );
+
+  if (confidence === "low") {
     return true;
   }
 
-  if (critique?.outliers?.length) {
+  const scores = validProviderAnswers
+    .map((item) => (typeof item.score === "number" ? item.score : -999))
+    .sort((a, b) => b - a);
+
+  const scoreSpread =
+    scores.length >= 2 ? Math.abs(scores[0] - scores[1]) : 0;
+
+  if (scoreSpread >= 18 && routePlan.difficulty !== "easy") {
     return true;
   }
 
@@ -1378,11 +1401,7 @@ function shouldExpandPanel({
     return true;
   }
 
-  const confidence = getConfidenceFromAnswers(
-    validProviderAnswers.map((item) => item.answer)
-  );
-
-  if (confidence === "low" && routePlan.difficulty !== "easy") {
+  if (routePlan.difficulty === "hard" && confidence !== "high") {
     return true;
   }
 
@@ -2629,13 +2648,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = `search:v25:${normalizedQuery}`;
+  const cacheKey = `search:v28:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
     : "";
   const semanticKey = semanticFingerprint
-    ? `semantic:v11:${semanticFingerprint}`
+    ? `semantic:v14:${semanticFingerprint}`
     : "";
 
   try {
@@ -2720,7 +2739,6 @@ export default async function handler(req, res) {
     }));
 
     const routePlan = buildRoutePlan({
-      query: normalizedQuery,
       queryType,
       difficulty: queryDifficulty,
       providers: providerConfigs
@@ -2758,19 +2776,8 @@ export default async function handler(req, res) {
       validProviderAnswers.flatMap((item) => item.source_links || [])
     );
 
-    let initialCritique = null;
-
-    if (validProviderAnswers.length >= 2) {
-      initialCritique = await critiqueProviderAnswers(
-        normalizedQuery,
-        validProviderAnswers,
-        queryType
-      );
-    }
-
     const expandNow = shouldExpandPanel({
       routePlan,
-      critique: initialCritique,
       validProviderAnswers,
       sourceLinks,
       remainingExpansionCount: expansionProviders.length
@@ -2899,6 +2906,7 @@ export default async function handler(req, res) {
 
       provider = "chiron-nexus";
       confidence = "low";
+      synthesisSkipped = true;
     }
 
     if (!finalAnswer) {
