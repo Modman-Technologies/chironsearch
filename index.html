@@ -12,19 +12,10 @@
       --panel: rgba(14, 18, 33, 0.82);
       --panel-2: rgba(22, 29, 49, 0.76);
       --border: rgba(160, 174, 208, 0.14);
-      --border-strong: rgba(182, 160, 255, 0.18);
       --text: #f8f7fb;
       --muted: #c7c4d4;
       --muted-2: #9a96ab;
       --shadow: 0 24px 60px rgba(0, 0, 0, 0.40);
-
-      --purple-1: rgba(213, 191, 255, 0.96);
-      --purple-2: rgba(190, 152, 255, 0.92);
-      --purple-3: rgba(161, 106, 255, 0.85);
-      --purple-4: rgba(121, 67, 218, 0.62);
-
-      --hero-top: #1a1323;
-      --hero-bottom: #0e0b14;
 
       --radius-xl: 30px;
       --radius-lg: 22px;
@@ -102,7 +93,7 @@
       inset: 0;
       z-index: 0;
       pointer-events: none;
-      opacity: 0.12;
+      opacity: 0.10;
       background:
         repeating-linear-gradient(
           90deg,
@@ -172,14 +163,7 @@
       gap: 12px;
     }
 
-    .auth-controls {
-      display: flex;
-      align-items: center;
-      min-height: 48px;
-    }
-
-    .signin-button,
-    .auth-chip-button {
+    .signin-button {
       appearance: none;
       min-height: 48px;
       padding: 11px 22px;
@@ -196,38 +180,10 @@
         0 10px 24px rgba(0,0,0,0.18);
     }
 
-    .signin-button:hover,
-    .auth-chip-button:hover {
+    .signin-button:hover {
       transform: translateY(-1px);
       border-color: rgba(213, 191, 255, 0.34);
       background: rgba(26, 18, 37, 0.56);
-    }
-
-    .auth-chip-button {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      max-width: 300px;
-      padding-right: 16px;
-    }
-
-    .auth-avatar {
-      width: 30px;
-      height: 30px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: rgba(255,255,255,0.11);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 800;
-      flex-shrink: 0;
-    }
-
-    .auth-chip-name {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
 
     .hero-stage {
@@ -264,7 +220,6 @@
       top: 140px;
       width: min(350px, 28vw);
       opacity: 0.10;
-      filter: grayscale(1) brightness(0.70) contrast(1.04);
       pointer-events: none;
       user-select: none;
       z-index: 1;
@@ -689,8 +644,7 @@
         width: min(280px, 56vw);
       }
 
-      .signin-button,
-      .auth-chip-button {
+      .signin-button {
         min-height: 42px;
         padding: 10px 16px;
         font-size: 15px;
@@ -785,15 +739,12 @@
             </a>
 
             <div class="hero-actions">
-              <div id="auth-controls" class="auth-controls">
-                <button class="signin-button" id="signin-button" type="button">Sign In</button>
-              </div>
+              <button class="signin-button" type="button">Sign In</button>
             </div>
           </div>
 
           <div class="hero-stage">
             <div class="embossed-chiron">CHIRON</div>
-
             <div class="centaur-mark" aria-hidden="true"></div>
 
             <div class="hero-copy">
@@ -983,18 +934,9 @@
     </div>
   </div>
 
-  <script
-    async
-    crossorigin="anonymous"
-    data-clerk-publishable-key="pk_test_Z3Jvd24tamVubmV0LTMyLmNsZXJrLmFjY291bnRzLmRldiQ"
-    src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
-  </script>
-
   <script>
     const queryInput = document.getElementById("query");
     const searchButton = document.getElementById("search-button");
-    const authControls = document.getElementById("auth-controls");
-
     const unifiedAnswer = document.getElementById("unified-answer");
     const statusBadge = document.getElementById("status-badge");
     const pillConfidence = document.getElementById("pill-confidence");
@@ -1009,14 +951,6 @@
     const aiSources = document.getElementById("ai-sources");
     const sourcesNote = document.getElementById("sources-note");
 
-    let clerkLoaded = false;
-
-    let authState = {
-      isSignedIn: false,
-      accessTier: "public",
-      user: null
-    };
-
     function escapeHtml(value) {
       return String(value ?? "")
         .replaceAll("&", "&amp;")
@@ -1026,123 +960,12 @@
         .replaceAll("'", "&#039;");
     }
 
-    function getInitials(name) {
-      const clean = String(name || "").trim();
-      if (!clean) return "CN";
-      return clean
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0].toUpperCase())
-        .join("");
-    }
-
-    function formatTierLabel(tier) {
-      const normalized = String(tier || "public").toLowerCase();
-      if (normalized === "admin") return "Admin";
-      if (normalized === "paid") return "Paid";
-      return "Public";
-    }
-
-    function setAuthState(nextState) {
-      authState = {
-        ...authState,
-        ...nextState,
-        accessTier: String(nextState?.accessTier || authState.accessTier || "public").toLowerCase()
-      };
-
-      if (!authState.isSignedIn) {
-        authState.accessTier = "public";
-        authState.user = null;
-      }
-
-      renderAuthUI();
-      renderAccessTierUI();
-    }
-
-    function renderAuthUI() {
-      if (!authControls) return;
-
-      if (!authState.isSignedIn) {
-        authControls.innerHTML = `
-          <button class="signin-button" id="signin-button" type="button">Sign In</button>
-        `;
-        document.getElementById("signin-button")?.addEventListener("click", handleSignInClick);
-        return;
-      }
-
-      const userName = authState.user?.name || "User";
-      const tierLabel = formatTierLabel(authState.accessTier);
-
-      authControls.innerHTML = `
-        <button class="auth-chip-button" id="account-button" type="button" aria-label="Account">
-          <span class="auth-avatar">${escapeHtml(getInitials(userName))}</span>
-          <span class="auth-chip-name">${escapeHtml(userName)} · ${escapeHtml(tierLabel)}</span>
-        </button>
-      `;
-
-      document.getElementById("account-button")?.addEventListener("click", handleAccountClick);
-    }
-
-    function renderAccessTierUI() {
-      const label = formatTierLabel(authState.accessTier);
-      pillAccessTier.textContent = `Access: ${label}`;
-      statAccessTier.textContent = String(label).toUpperCase();
-    }
-
     function setStatus(state, text) {
       statusBadge.className = "status-badge";
       if (state === "loading") statusBadge.classList.add("loading");
       if (state === "success") statusBadge.classList.add("success");
       if (state === "error") statusBadge.classList.add("error");
       statusBadge.textContent = text;
-    }
-
-    function updateAuthFromClerk() {
-      if (!window.Clerk || !Clerk.user) {
-        setAuthState({
-          isSignedIn: false,
-          accessTier: "public",
-          user: null
-        });
-        return;
-      }
-
-      const tier = String(Clerk.user?.publicMetadata?.tier || "paid").toLowerCase();
-
-      setAuthState({
-        isSignedIn: true,
-        accessTier: tier,
-        user: {
-          name: Clerk.user.fullName || Clerk.user.firstName || "User"
-        }
-      });
-    }
-
-    async function initClerk() {
-      if (!window.Clerk) return;
-
-      try {
-        await Clerk.load();
-        clerkLoaded = true;
-        updateAuthFromClerk();
-
-        Clerk.addListener(() => {
-          updateAuthFromClerk();
-        });
-      } catch (error) {
-        console.error("Clerk failed to load:", error);
-      }
-    }
-
-    function handleSignInClick() {
-      if (!clerkLoaded || !window.Clerk) return;
-      Clerk.openSignIn();
-    }
-
-    async function handleAccountClick() {
-      if (!clerkLoaded || !window.Clerk) return;
-      await Clerk.signOut();
     }
 
     function setFallbackAnswer(message) {
@@ -1167,10 +990,10 @@
       pillCached.textContent = `Cached: ${data?.cached === true ? "Yes" : data?.cached === false ? "No" : "--"}`;
       pillResponseTime.textContent = `Response Time: ${elapsedMs} ms`;
       pillCacheType.textContent = `Cache Type: ${data?.cache_type || "--"}`;
-      pillAccessTier.textContent = `Access: ${formatTierLabel(data?.access_tier || authState.accessTier)}`;
+      pillAccessTier.textContent = `Access: ${String(data?.access_tier || "public").replace(/^./, c => c.toUpperCase())}`;
 
       statPrimaryProvider.textContent = data?.provider || "--";
-      statAccessTier.textContent = String(data?.access_tier || authState.accessTier || "public").toUpperCase();
+      statAccessTier.textContent = String(data?.access_tier || "public").toUpperCase();
 
       const routeMode = data?.route_mode || "--";
       const queryType = data?.query_type || "--";
@@ -1244,10 +1067,6 @@
     });
 
     searchButton.addEventListener("click", goSearch);
-
-    renderAuthUI();
-    renderAccessTierUI();
-    initClerk();
   </script>
 </body>
 </html>
