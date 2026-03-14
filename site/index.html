@@ -1,811 +1,123 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chiron Nexus</title>
-
-  <style>
-    :root {
-      --text: #f8f7fb;
-      --muted: #d7d0e6;
-      --muted-2: #aca5bc;
-
-      --hero-width: 1120px;
-      --content-width: 1120px;
-
-      --radius-xl: 30px;
-      --radius-lg: 22px;
-      --radius-md: 18px;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: Inter, Arial, sans-serif;
-      color: var(--text);
-      background:
-        linear-gradient(180deg, rgba(6, 5, 13, 0.44), rgba(6, 5, 13, 0.60)),
-        url("/chiron-background.png") center center / cover no-repeat;
-    }
-
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at 50% 28%, rgba(111, 76, 255, 0.08), transparent 20%),
-        linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.18));
-      z-index: 0;
-    }
-
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    button,
-    input {
-      font: inherit;
-    }
-
-    .page {
-      position: relative;
-      z-index: 1;
-      width: 100%;
-      padding: 20px 24px 38px;
-    }
-
-    .hero {
-      position: relative;
-      width: min(var(--hero-width), 100%);
-      min-height: 640px;
-      margin: 0 auto;
-      padding: 22px 24px 28px;
-      border-radius: 32px;
-      overflow: hidden;
-      background:
-        radial-gradient(circle at 50% 38%, rgba(109, 71, 255, 0.12), transparent 24%),
-        linear-gradient(180deg, rgba(10, 9, 18, 0.44), rgba(8, 7, 15, 0.56));
-      border: 1px solid rgba(255, 255, 255, 0.03);
-      box-shadow:
-        0 20px 50px rgba(0, 0, 0, 0.24),
-        inset 0 1px 0 rgba(255, 255, 255, 0.03);
-      backdrop-filter: blur(12px) saturate(125%);
-      -webkit-backdrop-filter: blur(12px) saturate(125%);
-    }
-
-    .hero::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at 82% 18%, rgba(164, 120, 255, 0.06), transparent 18%),
-        radial-gradient(circle at 18% 78%, rgba(81, 54, 165, 0.06), transparent 24%);
-      z-index: 0;
-    }
-
-    .hero-inner {
-      position: relative;
-      z-index: 1;
-      min-height: 590px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .hero-topbar {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 18px;
-    }
-
-    .brand-lockup {
-      display: inline-flex;
-      align-items: center;
-      min-width: 0;
-    }
-
-    .brand-full-wrap {
-      display: block;
-      width: min(360px, 28vw);
-      min-width: 220px;
-      filter:
-        drop-shadow(0 8px 18px rgba(0, 0, 0, 0.26))
-        drop-shadow(0 0 10px rgba(132, 94, 255, 0.12));
-    }
-
-    .brand-full-wrap img {
-      width: 100%;
-      height: auto;
-      display: block;
-      object-fit: contain;
-    }
-
-    .signin-button {
-      appearance: none;
-      min-height: 42px;
-      padding: 10px 16px;
-      border: 1px solid rgba(201, 178, 255, 0.16);
-      border-radius: 999px;
-      background:
-        linear-gradient(180deg, rgba(29, 21, 46, 0.70), rgba(16, 12, 28, 0.82));
-      color: #faf7ff;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.04),
-        0 10px 20px rgba(0, 0, 0, 0.16);
-      transition: transform 0.16s ease, border-color 0.16s ease;
-    }
-
-    .signin-button:hover {
-      transform: translateY(-1px);
-      border-color: rgba(221, 199, 255, 0.24);
-    }
-
-    .hero-center {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 28px 0 4px;
-    }
-
-    .hero-copy {
-      width: 100%;
-      max-width: 760px;
-      text-align: center;
-    }
-
-    .nexus-title {
-      margin: 0;
-      font-size: clamp(78px, 11vw, 120px);
-      line-height: 0.92;
-      letter-spacing: -0.065em;
-      font-weight: 800;
-      color: #f8f6fb;
-      text-shadow:
-        0 12px 28px rgba(0, 0, 0, 0.28),
-        0 0 22px rgba(205, 170, 255, 0.08);
-    }
-
-    .nexus-subtitle {
-      margin-top: 8px;
-      font-size: clamp(20px, 2vw, 30px);
-      line-height: 1.2;
-      font-weight: 500;
-      color: #f1ebfb;
-    }
-
-    .nexus-description {
-      margin-top: 12px;
-      font-size: clamp(16px, 1.3vw, 20px);
-      line-height: 1.55;
-      color: #d7d0e6;
-    }
-
-    .search-frame {
-      width: min(700px, 100%);
-      margin: 28px auto 0;
-    }
-
-    .search-box {
-      display: flex;
-      align-items: stretch;
-      width: 100%;
-      border-radius: 999px;
-      overflow: hidden;
-      background:
-        linear-gradient(90deg, rgba(27, 18, 50, 0.92), rgba(18, 15, 37, 0.94));
-      border: 1px solid rgba(151, 118, 255, 0.16);
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.04),
-        0 18px 42px rgba(0, 0, 0, 0.28),
-        0 0 30px rgba(126, 91, 255, 0.12);
-    }
-
-    .search-box:focus-within {
-      border-color: rgba(220, 201, 255, 0.28);
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.05),
-        0 18px 42px rgba(0, 0, 0, 0.30),
-        0 0 40px rgba(126, 91, 255, 0.18);
-    }
-
-    .search-input {
-      flex: 1;
-      min-width: 0;
-      height: 72px;
-      padding: 0 24px;
-      border: 0;
-      outline: 0;
-      background: transparent;
-      color: var(--text);
-      font-size: 18px;
-      letter-spacing: -0.01em;
-    }
-
-    .search-input::placeholder {
-      color: #b9afd0;
-    }
-
-    .search-button {
-      width: 76px;
-      border: 0;
-      border-left: 1px solid rgba(255, 255, 255, 0.05);
-      display: grid;
-      place-items: center;
-      cursor: pointer;
-      color: #fff;
-      background: linear-gradient(180deg, #7c5cff, #5a3fd6);
-      box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.02);
-      transition: filter 0.16s ease;
-    }
-
-    .search-button:hover {
-      filter: brightness(1.06);
-    }
-
-    .search-button:disabled {
-      opacity: 0.8;
-      cursor: not-allowed;
-    }
-
-    .search-button svg {
-      width: 28px;
-      height: 28px;
-    }
-
-    .powered-by {
-      margin-top: 10px;
-      text-align: center;
-      color: #ddd3ee;
-      font-size: 15px;
-    }
-
-    .powered-by strong {
-      color: #f7f3ff;
-      font-weight: 700;
-    }
-
-    .results-shell {
-      width: min(var(--content-width), 100%);
-      margin: 20px auto 0;
-      display: grid;
-      grid-template-columns: 1.08fr 0.92fr;
-      gap: 16px;
-      align-items: start;
-    }
-
-    .column {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .panel {
-      background: linear-gradient(180deg, rgba(10, 9, 20, 0.58), rgba(8, 7, 16, 0.68));
-      border: 1px solid rgba(203, 184, 255, 0.08);
-      border-radius: 20px;
-      padding: 22px;
-      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-    }
-
-    .panel-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 14px;
-      margin-bottom: 16px;
-    }
-
-    .panel-title-wrap {
-      min-width: 0;
-    }
-
-    .panel h2 {
-      margin: 0;
-      font-size: 20px;
-      line-height: 1.1;
-      letter-spacing: -0.03em;
-    }
-
-    .panel-subtitle {
-      margin-top: 6px;
-      color: var(--muted-2);
-      font-size: 12px;
-      line-height: 1.55;
-    }
-
-    .status-badge {
-      flex-shrink: 0;
-      border-radius: 999px;
-      padding: 9px 12px;
-      font-size: 11px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      border: 1px solid rgba(182, 140, 255, 0.18);
-      background: rgba(120, 78, 216, 0.14);
-      color: #f0e5ff;
-    }
-
-    .status-badge.loading {
-      background: rgba(161, 98, 7, 0.30);
-      color: #fef3c7;
-      border-color: rgba(250, 204, 21, 0.18);
-    }
-
-    .status-badge.success {
-      background: rgba(22, 101, 52, 0.30);
-      color: #dcfce7;
-      border-color: rgba(134, 239, 172, 0.18);
-    }
-
-    .status-badge.error {
-      background: rgba(127, 29, 29, 0.30);
-      color: #fee2e2;
-      border-color: rgba(252, 165, 165, 0.12);
-    }
-
-    .answer-text {
-      min-height: 140px;
-      color: #ece8f7;
-      line-height: 1.8;
-      font-size: 15px;
-      word-break: break-word;
-    }
-
-    .answer-text p {
-      margin: 0 0 1em;
-    }
-
-    .answer-text p:last-child {
-      margin-bottom: 0;
-    }
-
-    .meta-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .meta-pill,
-    .source-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 13px;
-      border-radius: 999px;
-      font-size: 12px;
-      border: 1px solid transparent;
-    }
-
-    .meta-pill {
-      background: linear-gradient(180deg, rgba(37, 26, 62, 0.72), rgba(23, 17, 39, 0.84));
-      color: #e6e0f3;
-      border-color: rgba(206, 183, 255, 0.12);
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.03),
-        inset 0 -8px 14px rgba(0, 0, 0, 0.18);
-    }
-
-    .meta-pill.high {
-      background: rgba(22, 101, 52, 0.25);
-      color: #dcfce7;
-      border-color: rgba(134, 239, 172, 0.18);
-    }
-
-    .meta-pill.medium {
-      background: rgba(146, 64, 14, 0.28);
-      color: #fef3c7;
-      border-color: rgba(253, 224, 71, 0.12);
-    }
-
-    .meta-pill.low {
-      background: rgba(127, 29, 29, 0.30);
-      color: #fee2e2;
-      border-color: rgba(252, 165, 165, 0.12);
-    }
-
-    .mini-stats {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 18px;
-    }
-
-    .stat-card {
-      min-height: 88px;
-      padding: 16px;
-      border-radius: var(--radius-md);
-      background:
-        linear-gradient(180deg, rgba(26, 18, 44, 0.56), rgba(18, 12, 30, 0.68));
-      border: 1px solid rgba(205, 179, 255, 0.10);
-      box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.03),
-        inset 0 -10px 16px rgba(0, 0, 0, 0.18);
-    }
-
-    .stat-label {
-      color: var(--muted-2);
-      font-size: 12px;
-      margin-bottom: 8px;
-    }
-
-    .stat-value {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--text);
-      line-height: 1.2;
-      word-break: break-word;
-    }
-
-    .source-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .source-pill {
-      background:
-        linear-gradient(180deg, rgba(39, 28, 62, 0.72), rgba(24, 18, 40, 0.80));
-      color: #e7ddf6;
-      border-color: rgba(205, 179, 255, 0.10);
-    }
-
-    .footer-note,
-    .sources-note {
-      margin-top: 14px;
-      color: var(--muted-2);
-      font-size: 12px;
-      line-height: 1.6;
-    }
-
-    .site-footer {
-      width: min(var(--content-width), 100%);
-      margin: 14px auto 0;
-      padding: 0 4px;
-      text-align: center;
-      color: #b9b1c9;
-      font-size: 13px;
-      line-height: 1.7;
-    }
-
-    @media (max-width: 900px) {
-      .results-shell {
-        grid-template-columns: 1fr;
-      }
-
-      body {
-        background-attachment: scroll;
-      }
-    }
-
-    @media (max-width: 780px) {
-      .page {
-        padding: 14px 12px 30px;
-      }
-
-      .hero {
-        min-height: 610px;
-        padding: 18px 16px 22px;
-        border-radius: 24px;
-      }
-
-      .brand-full-wrap {
-        width: min(240px, 52vw);
-        min-width: 150px;
-      }
-
-      .signin-button {
-        min-height: 40px;
-        padding: 9px 14px;
-        font-size: 13px;
-      }
-
-      .hero-center {
-        padding-top: 24px;
-      }
-
-      .nexus-title {
-        font-size: clamp(58px, 16vw, 92px);
-      }
-
-      .nexus-subtitle {
-        font-size: 18px;
-      }
-
-      .nexus-description {
-        font-size: 15px;
-      }
-
-      .search-input {
-        height: 64px;
-        font-size: 16px;
-        padding: 0 20px;
-      }
-
-      .search-button {
-        width: 70px;
-      }
-
-      .panel {
-        padding: 20px;
-      }
-
-      .mini-stats {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chiron Nexus Auth Test</title>
+
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="YOUR_CLERK_PUBLISHABLE_KEY"
+  src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
+</script>
+
+<style>
+body{
+  font-family: Arial, sans-serif;
+  margin:40px;
+  max-width:800px;
+}
+
+button{
+  padding:10px 16px;
+  margin:6px 0;
+  cursor:pointer;
+}
+
+pre{
+  background:#f5f5f5;
+  padding:12px;
+  overflow:auto;
+}
+</style>
 </head>
+
 <body>
-  <div class="page">
-    <section class="hero">
-      <div class="hero-inner">
-        <div class="hero-topbar">
-          <a class="brand-lockup" href="#" aria-label="Modman Technologies LLC">
-            <div class="brand-full-wrap">
-              <img src="/modman-technologies-full.png" alt="Modman Technologies LLC logo" />
-            </div>
-          </a>
 
-          <button class="signin-button" id="signin-button" type="button">Sign In</button>
-        </div>
+<h1>Chiron Nexus — Auth Test</h1>
 
-        <div class="hero-center">
-          <div class="hero-copy">
-            <h1 class="nexus-title">Nexus</h1>
-            <div class="nexus-subtitle">Trusted AI Intelligence</div>
-            <div class="nexus-description">Multi-model reasoning, verification &amp; synthesis</div>
+<div id="auth-state">Loading...</div>
 
-            <div class="search-frame">
-              <div class="search-box">
-                <input
-                  class="search-input"
-                  id="query"
-                  type="text"
-                  placeholder="Ask Nexus anything..."
-                  autocomplete="off"
-                />
-                <button class="search-button" id="search-button" type="button" aria-label="Search">
-                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                    <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" />
-                  </svg>
-                </button>
-              </div>
+<button id="signin">Sign In</button>
+<button id="signout">Sign Out</button>
 
-              <div class="powered-by">Powered by <strong>Chiron</strong></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+<h2>User Info</h2>
 
-    <section class="results-shell" id="results-shell">
-      <div class="column">
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title-wrap">
-              <h2>Unified Answer</h2>
-              <div class="panel-subtitle">Final response area for the Chiron Nexus broker.</div>
-            </div>
-            <div class="status-badge" id="status-badge">Idle</div>
-          </div>
+<div>Email: <span id="email">--</span></div>
+<div>User ID: <span id="userid">--</span></div>
+<div>Access Tier: <span id="tier">--</span></div>
 
-          <div class="answer-text" id="unified-answer">
-            <p>Search results will appear here.</p>
-          </div>
-        </div>
-      </div>
+<h2>Search API Test</h2>
 
-      <div class="column">
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title-wrap">
-              <h2>Answer Details</h2>
-              <div class="panel-subtitle">Provider, cache, confidence, access, and timing metadata.</div>
-            </div>
-          </div>
+<input id="query" placeholder="Enter query"/>
+<button id="testSearch">Run Search</button>
 
-          <div class="meta-grid">
-            <div class="meta-pill" id="pill-confidence">Confidence: --</div>
-            <div class="meta-pill" id="pill-provider">Provider: --</div>
-            <div class="meta-pill" id="pill-cached">Cached: --</div>
-            <div class="meta-pill" id="pill-response-time">Response Time: --</div>
-            <div class="meta-pill" id="pill-cache-type">Cache Type: --</div>
-            <div class="meta-pill" id="pill-access-tier">Access: Public</div>
-          </div>
+<pre id="result"></pre>
 
-          <div class="mini-stats">
-            <div class="stat-card">
-              <div class="stat-label">Primary Provider</div>
-              <div class="stat-value" id="stat-primary-provider">--</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Current Access</div>
-              <div class="stat-value" id="stat-access-tier">PUBLIC</div>
-            </div>
-          </div>
+<script>
 
-          <div class="footer-note" id="details-footer-note">
-            Route mode, caching, access state, and synthesis metadata will render here when backend search is connected.
-          </div>
-        </div>
+let clerk;
 
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title-wrap">
-              <h2>AI Sources</h2>
-              <div class="panel-subtitle">Providers and source references returned by the API.</div>
-            </div>
-          </div>
+async function init(){
 
-          <div class="source-list" id="ai-sources"></div>
-          <div class="sources-note" id="sources-note">Source links will appear here once live results are shown.</div>
-        </div>
-      </div>
-    </section>
+  clerk = window.Clerk;
 
-    <div class="site-footer">
-      Nexus is part of the Chiron AI platform, built by Modman Technologies LLC.
-    </div>
-  </div>
+  await clerk.load();
 
-  <script>
-    const queryInput = document.getElementById("query");
-    const searchButton = document.getElementById("search-button");
-    const signinButton = document.getElementById("signin-button");
-    const unifiedAnswer = document.getElementById("unified-answer");
-    const statusBadge = document.getElementById("status-badge");
-    const pillConfidence = document.getElementById("pill-confidence");
-    const pillProvider = document.getElementById("pill-provider");
-    const pillCached = document.getElementById("pill-cached");
-    const pillResponseTime = document.getElementById("pill-response-time");
-    const pillCacheType = document.getElementById("pill-cache-type");
-    const pillAccessTier = document.getElementById("pill-access-tier");
-    const statPrimaryProvider = document.getElementById("stat-primary-provider");
-    const statAccessTier = document.getElementById("stat-access-tier");
-    const detailsFooterNote = document.getElementById("details-footer-note");
-    const aiSources = document.getElementById("ai-sources");
-    const sourcesNote = document.getElementById("sources-note");
+  updateAuth();
 
-    function escapeHtml(value) {
-      return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }
+  document.getElementById("signin").onclick = () => clerk.openSignIn();
 
-    function setStatus(state, text) {
-      statusBadge.className = "status-badge";
-      if (state === "loading") statusBadge.classList.add("loading");
-      if (state === "success") statusBadge.classList.add("success");
-      if (state === "error") statusBadge.classList.add("error");
-      statusBadge.textContent = text;
-    }
+  document.getElementById("signout").onclick = () => clerk.signOut();
 
-    function setFallbackAnswer(message) {
-      unifiedAnswer.innerHTML = `<p>${escapeHtml(message)}</p>`;
-    }
+}
 
-    function renderResult(data, elapsedMs) {
-      const answerHtml = String(data?.answer || "No answer returned.")
-        .split(/\n{2,}/)
-        .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
-        .join("");
+function updateAuth(){
 
-      unifiedAnswer.innerHTML = answerHtml;
+  const user = clerk.user;
 
-      pillConfidence.className = "meta-pill";
-      if (data?.confidence === "high") pillConfidence.classList.add("high");
-      if (data?.confidence === "medium") pillConfidence.classList.add("medium");
-      if (data?.confidence === "low") pillConfidence.classList.add("low");
-      pillConfidence.textContent = `Confidence: ${data?.confidence || "--"}`;
+  if(!user){
+    document.getElementById("auth-state").innerText = "Not signed in";
+    return;
+  }
 
-      pillProvider.textContent = `Provider: ${data?.provider || "--"}`;
-      pillCached.textContent = `Cached: ${data?.cached === true ? "Yes" : data?.cached === false ? "No" : "--"}`;
-      pillResponseTime.textContent = `Response Time: ${elapsedMs} ms`;
-      pillCacheType.textContent = `Cache Type: ${data?.cache_type || "--"}`;
-      pillAccessTier.textContent = `Access: ${String(data?.access_tier || "public").replace(/^./, c => c.toUpperCase())}`;
+  document.getElementById("auth-state").innerText = "Signed in";
 
-      statPrimaryProvider.textContent = data?.provider || "--";
-      statAccessTier.textContent = String(data?.access_tier || "public").toUpperCase();
+  const email = user.primaryEmailAddress?.emailAddress;
 
-      const routeMode = data?.route_mode || "--";
-      const queryType = data?.query_type || "--";
-      const difficulty = data?.query_difficulty || "--";
-      detailsFooterNote.textContent = `Route: ${routeMode} • Query Type: ${queryType} • Difficulty: ${difficulty}`;
+  document.getElementById("email").innerText = email || "--";
 
-      const sourceLinks = Array.isArray(data?.source_links) ? data.source_links : [];
-      const sourceNames = Array.isArray(data?.sources) ? data.sources : [];
+  document.getElementById("userid").innerText = user.id;
 
-      if (sourceLinks.length > 0) {
-        aiSources.innerHTML = sourceLinks.map((item) => {
-          const href = escapeHtml(item?.url || "#");
-          const title = escapeHtml(item?.title || item?.provider || "Source");
-          return `<a class="source-pill" href="${href}" target="_blank" rel="noopener noreferrer">${title}</a>`;
-        }).join("");
-        sourcesNote.textContent = "Live sources returned by the query.";
-      } else if (sourceNames.length > 0) {
-        aiSources.innerHTML = sourceNames
-          .map((item) => `<div class="source-pill">${escapeHtml(item)}</div>`)
-          .join("");
-        sourcesNote.textContent = "Provider references returned by the query.";
-      } else {
-        aiSources.innerHTML = "";
-        sourcesNote.textContent = "No source links were returned for this result.";
-      }
-    }
+}
 
-    async function goSearch() {
-      const q = queryInput.value.trim();
-      if (!q) return;
+document.getElementById("testSearch").onclick = async () => {
 
-      searchButton.disabled = true;
-      setStatus("loading", "Searching");
-      setFallbackAnswer("Thinking...");
+  const q = document.getElementById("query").value;
 
-      try {
-        const startedAt = performance.now();
+  const token = await clerk.session.getToken();
 
-        const response = await fetch("/api/search", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ query: q })
-        });
+  const res = await fetch("/api/search",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":`Bearer ${token}`
+    },
+    body:JSON.stringify({query:q})
+  });
 
-        const elapsedMs = Math.round(performance.now() - startedAt);
-        const data = await response.json();
+  const data = await res.json();
 
-        if (!response.ok) {
-          setStatus("error", "Error");
-          setFallbackAnswer(data?.answer || "Search failed.");
-          return;
-        }
+  document.getElementById("tier").innerText = data.access_tier || "--";
 
-        renderResult(data, elapsedMs);
-        setStatus("success", data?.cached ? "Cached" : "Live");
-      } catch (error) {
-        console.error(error);
-        setStatus("error", "Error");
-        setFallbackAnswer("Search failed.");
-      } finally {
-        searchButton.disabled = false;
-      }
-    }
+  document.getElementById("result").innerText = JSON.stringify(data,null,2);
 
-    queryInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        goSearch();
-      }
-    });
+};
 
-    searchButton.addEventListener("click", goSearch);
+init();
 
-    signinButton.addEventListener("click", () => {
-      window.location.href = "/sign-in";
-    });
-  </script>
+</script>
+
 </body>
 </html>
