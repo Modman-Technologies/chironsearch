@@ -1,207 +1,241 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chiron Nexus — Auth Test</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chiron Nexus — Auth Test</title>
 
-  <script
-    async
-    crossorigin="anonymous"
-    data-clerk-publishable-key="pk_test_Z3Jvd24tamVubmV0LTMyLmNsZXJrLmFjY291bnRzLmRldiQ"
-    src="https://grown-jennet-32.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
-    type="text/javascript">
-  </script>
+<script
+  id="clerk-script"
+  crossorigin="anonymous"
+  data-clerk-publishable-key="pk_test_Z3Jvd24tamVubmV0LTMyLmNsZXJrLmFjY291bnRzLmRldiQ"
+  src="https://grown-jennet-32.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js">
+</script>
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 40px;
-      max-width: 900px;
-    }
+<style>
+body{
+  font-family: Arial, sans-serif;
+  margin:40px;
+  max-width:900px;
+}
 
-    button {
-      padding: 10px 16px;
-      margin: 6px 6px 6px 0;
-      cursor: pointer;
-    }
+button{
+  padding:10px 16px;
+  margin:6px 6px 6px 0;
+  cursor:pointer;
+}
 
-    input {
-      padding: 10px 12px;
-      width: 260px;
-      margin-right: 8px;
-    }
+input{
+  padding:10px 12px;
+  width:260px;
+  margin-right:8px;
+}
 
-    pre {
-      background: #f5f5f5;
-      padding: 12px;
-      overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      min-height: 180px;
-    }
+pre{
+  background:#f5f5f5;
+  padding:12px;
+  overflow:auto;
+  white-space:pre-wrap;
+  word-break:break-word;
+  min-height:180px;
+}
 
-    .muted {
-      color: #666;
-    }
-  </style>
+.muted{
+  color:#666;
+}
+</style>
+
 </head>
 <body>
-  <h1>Chiron Nexus — Auth Test</h1>
 
-  <div id="auth-state">Loading...</div>
+<h1>Chiron Nexus — Auth Test</h1>
 
-  <button id="signin" type="button">Sign In</button>
-  <button id="signout" type="button">Sign Out</button>
+<div id="auth-state">Loading...</div>
 
-  <h2>User Info</h2>
-  <div>Email: <span id="email">--</span></div>
-  <div>User ID: <span id="userid">--</span></div>
-  <div>Access Tier: <span id="tier">--</span></div>
+<button id="signin">Sign In</button>
+<button id="signout">Sign Out</button>
 
-  <h2>Search API Test</h2>
-  <input id="query" placeholder="Enter query" value="weather today" />
-  <button id="testSearch" type="button">Run Search</button>
+<h2>User Info</h2>
 
-  <pre id="result"></pre>
+<div>Email: <span id="email">--</span></div>
+<div>User ID: <span id="userid">--</span></div>
+<div>Access Tier: <span id="tier">--</span></div>
 
-  <script>
-    let clerk = null;
+<h2>Search API Test</h2>
 
-    const authStateEl = document.getElementById("auth-state");
-    const emailEl = document.getElementById("email");
-    const userIdEl = document.getElementById("userid");
-    const tierEl = document.getElementById("tier");
-    const resultEl = document.getElementById("result");
-    const queryEl = document.getElementById("query");
-    const signInBtn = document.getElementById("signin");
-    const signOutBtn = document.getElementById("signout");
-    const testSearchBtn = document.getElementById("testSearch");
+<input id="query" value="weather today">
+<button id="run">Run Search</button>
 
-    function setSignedOutState() {
-      authStateEl.innerText = "Not signed in";
-      emailEl.innerText = "--";
-      userIdEl.innerText = "--";
-      tierEl.innerText = "--";
+<pre id="result"></pre>
+
+<script>
+
+let clerk = null;
+
+const authState = document.getElementById("auth-state");
+const emailEl = document.getElementById("email");
+const userIdEl = document.getElementById("userid");
+const tierEl = document.getElementById("tier");
+const resultEl = document.getElementById("result");
+const queryEl = document.getElementById("query");
+
+const signInBtn = document.getElementById("signin");
+const signOutBtn = document.getElementById("signout");
+const runBtn = document.getElementById("run");
+
+
+function setSignedOut(){
+  authState.innerText="Not signed in";
+  emailEl.innerText="--";
+  userIdEl.innerText="--";
+  tierEl.innerText="--";
+}
+
+function updateAuth(){
+
+  if(!clerk || !clerk.user){
+    setSignedOut();
+    return;
+  }
+
+  const user = clerk.user;
+  const email = user.primaryEmailAddress?.emailAddress || "--";
+
+  authState.innerText="Signed in";
+  emailEl.innerText=email;
+  userIdEl.innerText=user.id;
+}
+
+async function init(){
+
+  if(!window.Clerk){
+    authState.innerText="Clerk failed to load";
+    return;
+  }
+
+  clerk = window.Clerk;
+
+  await clerk.load();
+
+  updateAuth();
+
+  clerk.addListener(({user})=>{
+    if(!user){
+      setSignedOut();
+      return;
+    }
+    updateAuth();
+  });
+
+  signInBtn.onclick=()=>{
+    clerk.openSignIn();
+  };
+
+  signOutBtn.onclick=async()=>{
+    await clerk.signOut();
+    setSignedOut();
+    resultEl.innerText="";
+  };
+
+  runBtn.onclick=runSearch;
+
+  queryEl.addEventListener("keydown",(e)=>{
+    if(e.key==="Enter"){
+      runSearch();
+    }
+  });
+
+}
+
+async function runSearch(){
+
+  const q=queryEl.value.trim();
+
+  if(!q){
+    resultEl.innerText="Enter a query.";
+    return;
+  }
+
+  if(!clerk){
+    resultEl.innerText="Clerk not initialized.";
+    return;
+  }
+
+  let token="";
+
+  try{
+    if(clerk.session){
+      token = await clerk.session.getToken({skipCache:true});
+    }
+  }catch(err){
+    console.error("Token error",err);
+  }
+
+  resultEl.innerText="Running search...";
+
+  try{
+
+    const headers={
+      "Content-Type":"application/json"
+    };
+
+    if(token){
+      headers["Authorization"]=`Bearer ${token}`;
     }
 
-    function updateAuth() {
-      if (!clerk || !clerk.user) {
-        setSignedOutState();
-        return;
-      }
+    const res = await fetch("/api/search",{
+      method:"POST",
+      headers,
+      body:JSON.stringify({query:q})
+    });
 
-      const user = clerk.user;
-      const email = user.primaryEmailAddress?.emailAddress || "--";
+    const text = await res.text();
 
-      authStateEl.innerText = "Signed in";
-      emailEl.innerText = email;
-      userIdEl.innerText = user.id || "--";
+    let data;
+
+    try{
+      data = JSON.parse(text);
+    }catch{
+      resultEl.innerText=text;
+      return;
     }
 
-    async function init() {
-      if (!window.Clerk) {
-        authStateEl.innerText = "Clerk failed to load";
-        return;
-      }
+    tierEl.innerText = data.access_tier || "--";
 
-      clerk = window.Clerk;
-      await clerk.load();
+    resultEl.innerText = JSON.stringify(data,null,2);
 
-      updateAuth();
+  }catch(err){
 
-      clerk.addListener(({ user }) => {
-        if (!user) {
-          setSignedOutState();
-          return;
-        }
-        updateAuth();
-      });
+    resultEl.innerText="Search failed: "+err.message;
 
-      signInBtn.onclick = () => {
-        clerk.openSignIn();
-      };
+  }
 
-      signOutBtn.onclick = async () => {
-        try {
-          await clerk.signOut();
-        } finally {
-          setSignedOutState();
-          resultEl.innerText = "";
-        }
-      };
+}
 
-      testSearchBtn.onclick = runSearch;
 
-      queryEl.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          runSearch();
-        }
-      });
-    }
+/* wait for clerk script to load */
 
-    async function runSearch() {
-      const q = queryEl.value.trim();
-      if (!q) {
-        resultEl.innerText = "Enter a query first.";
-        return;
-      }
+const clerkScript=document.getElementById("clerk-script");
 
-      if (!clerk) {
-        resultEl.innerText = "Clerk is not initialized.";
-        return;
-      }
+if(window.Clerk){
+  init();
+}
+else if(clerkScript){
 
-      let token = "";
+  clerkScript.addEventListener("load",()=>{
+    init();
+  });
 
-      try {
-        if (clerk.session) {
-          token = await clerk.session.getToken({ skipCache: true });
-        }
-      } catch (error) {
-        console.error("Failed to get Clerk token:", error);
-      }
+  clerkScript.addEventListener("error",()=>{
+    authState.innerText="Clerk script failed to load";
+  });
 
-      console.log("CLIENT email:", clerk.user?.primaryEmailAddress?.emailAddress || null);
-      console.log("CLIENT userId:", clerk.user?.id || null);
-      console.log("CLIENT token prefix:", token ? token.slice(0, 24) : "NO_TOKEN");
+}
+else{
+  authState.innerText="Clerk script tag missing";
+}
 
-      resultEl.innerText = "Running search...";
+</script>
 
-      try {
-        const headers = {
-          "Content-Type": "application/json"
-        };
-
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-
-        const res = await fetch("/api/search", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ query: q })
-        });
-
-        const text = await res.text();
-        let data = null;
-
-        try {
-          data = JSON.parse(text);
-        } catch {
-          resultEl.innerText = text || "Non-JSON response returned.";
-          return;
-        }
-
-        tierEl.innerText = data?.access_tier || "--";
-        resultEl.innerText = JSON.stringify(data, null, 2);
-      } catch (error) {
-        console.error("Search request failed:", error);
-        resultEl.innerText = `Search failed: ${error?.message || error}`;
-      }
-    }
-
-    document.addEventListener("DOMContentLoaded", init);
-  </script>
 </body>
 </html>
