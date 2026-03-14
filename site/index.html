@@ -17,28 +17,32 @@
     body {
       font-family: Arial, sans-serif;
       margin: 40px;
-      max-width: 800px;
+      max-width: 900px;
     }
 
     button {
       padding: 10px 16px;
-      margin: 6px 0;
+      margin: 6px 6px 6px 0;
       cursor: pointer;
     }
 
     input {
-      padding: 8px;
-      margin-right: 8px;
+      padding: 10px 12px;
       width: 260px;
+      margin-right: 8px;
     }
 
     pre {
       background: #f5f5f5;
       padding: 12px;
       overflow: auto;
-      min-height: 80px;
       white-space: pre-wrap;
       word-break: break-word;
+      min-height: 180px;
+    }
+
+    .muted {
+      color: #666;
     }
   </style>
 </head>
@@ -56,7 +60,7 @@
   <div>Access Tier: <span id="tier">--</span></div>
 
   <h2>Search API Test</h2>
-  <input id="query" placeholder="Enter query" />
+  <input id="query" placeholder="Enter query" value="weather today" />
   <button id="testSearch" type="button">Run Search</button>
 
   <pre id="result"></pre>
@@ -64,95 +68,140 @@
   <script>
     let clerk = null;
 
-    function setText(id, value) {
-      document.getElementById(id).innerText = value ?? "--";
+    const authStateEl = document.getElementById("auth-state");
+    const emailEl = document.getElementById("email");
+    const userIdEl = document.getElementById("userid");
+    const tierEl = document.getElementById("tier");
+    const resultEl = document.getElementById("result");
+    const queryEl = document.getElementById("query");
+    const signInBtn = document.getElementById("signin");
+    const signOutBtn = document.getElementById("signout");
+    const testSearchBtn = document.getElementById("testSearch");
+
+    function setSignedOutState() {
+      authStateEl.innerText = "Not signed in";
+      emailEl.innerText = "--";
+      userIdEl.innerText = "--";
+      tierEl.innerText = "--";
     }
 
     function updateAuth() {
-      const user = clerk?.user || null;
-
-      if (!user) {
-        setText("auth-state", "Not signed in");
-        setText("email", "--");
-        setText("userid", "--");
-        setText("tier", "--");
+      if (!clerk || !clerk.user) {
+        setSignedOutState();
         return;
       }
 
-      setText("auth-state", "Signed in");
-      setText("email", user.primaryEmailAddress?.emailAddress || "--");
-      setText("userid", user.id || "--");
+      const user = clerk.user;
+      const email = user.primaryEmailAddress?.emailAddress || "--";
+
+      authStateEl.innerText = "Signed in";
+      emailEl.innerText = email;
+      userIdEl.innerText = user.id || "--";
     }
 
     async function init() {
-      try {
-        setText("auth-state", "Loading Clerk...");
+      if (!window.Clerk) {
+        authStateEl.innerText = "Clerk failed to load";
+        return;
+      }
 
-        if (!window.Clerk) {
-          throw new Error("Clerk script did not load.");
+      clerk = window.Clerk;
+      await clerk.load();
+
+      updateAuth();
+
+      clerk.addListener(({ user }) => {
+        if (!user) {
+          setSignedOutState();
+          return;
         }
-
-        clerk = window.Clerk;
-        await clerk.load();
-
-        console.log("Clerk loaded");
         updateAuth();
+      });
 
-        if (typeof clerk.addListener === "function") {
-          clerk.addListener(() => {
-            updateAuth();
-          });
+      signInBtn.onclick = () => {
+        clerk.openSignIn();
+      };
+
+      signOutBtn.onclick = async () => {
+        try {
+          await clerk.signOut();
+        } finally {
+          setSignedOutState();
+          resultEl.innerText = "";
+        }
+      };
+
+      testSearchBtn.onclick = runSearch;
+
+      queryEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          runSearch();
+        }
+      });
+    }
+
+    async function runSearch() {
+      const q = queryEl.value.trim();
+      if (!q) {
+        resultEl.innerText = "Enter a query first.";
+        return;
+      }
+
+      if (!clerk) {
+        resultEl.innerText = "Clerk is not initialized.";
+        return;
+      }
+
+      let token = "";
+
+      try {
+        if (clerk.session) {
+          token = await clerk.session.getToken({ skipCache: true });
+        }
+      } catch (error) {
+        console.error("Failed to get Clerk token:", error);
+      }
+
+      console.log("CLIENT email:", clerk.user?.primaryEmailAddress?.emailAddress || null);
+      console.log("CLIENT userId:", clerk.user?.id || null);
+      console.log("CLIENT token prefix:", token ? token.slice(0, 24) : "NO_TOKEN");
+
+      resultEl.innerText = "Running search...";
+
+      try {
+        const headers = {
+          "Content-Type": "application/json"
+        };
+
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
         }
 
-        document.getElementById("signin").onclick = async () => {
-          await clerk.openSignIn();
-        };
+        const res = await fetch("/api/search", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ query: q })
+        });
 
-        document.getElementById("signout").onclick = async () => {
-          await clerk.signOut();
-          updateAuth();
-        };
+        const text = await res.text();
+        let data = null;
 
-        document.getElementById("testSearch").onclick = async () => {
-          const q = document.getElementById("query").value.trim();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          resultEl.innerText = text || "Non-JSON response returned.";
+          return;
+        }
 
-          if (!q) {
-            document.getElementById("result").innerText = "Enter a query first.";
-            return;
-          }
-
-          if (!clerk?.session) {
-            alert("You must sign in first");
-            return;
-          }
-
-          const token = await clerk.session.getToken({ skipCache: true });
-
-          console.log("CLIENT email:", clerk.user?.primaryEmailAddress?.emailAddress || null);
-          console.log("CLIENT userId:", clerk.user?.id || null);
-          console.log("CLIENT token prefix:", token ? token.slice(0, 24) : "NO_TOKEN");
-
-          const res = await fetch("/api/search", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { "Authorization": `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify({ query: q })
-          });
-
-          const data = await res.json();
-
-          setText("tier", data.access_tier || "--");
-          document.getElementById("result").innerText = JSON.stringify(data, null, 2);
-        };
+        tierEl.innerText = data?.access_tier || "--";
+        resultEl.innerText = JSON.stringify(data, null, 2);
       } catch (error) {
-        console.error("INIT ERROR:", error);
-        setText("auth-state", `Init error: ${error.message}`);
+        console.error("Search request failed:", error);
+        resultEl.innerText = `Search failed: ${error?.message || error}`;
       }
     }
 
-    window.addEventListener("load", init);
+    document.addEventListener("DOMContentLoaded", init);
   </script>
 </body>
 </html>
