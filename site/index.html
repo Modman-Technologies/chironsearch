@@ -7,26 +7,28 @@
 
   <style>
     :root {
+      --bg-deep: #06050d;
+      --bg-panel: rgba(12, 10, 24, 0.78);
+      --bg-panel-2: rgba(9, 8, 18, 0.9);
+      --bg-pill: rgba(37, 26, 62, 0.72);
+      --bg-pill-2: rgba(23, 17, 39, 0.84);
+
       --text: #f8f7fb;
-      --muted: #d4cde4;
-      --muted-2: #a8a1ba;
+      --muted: #d7d0e6;
+      --muted-2: #aca5bc;
 
-      --panel: rgba(12, 10, 24, 0.84);
-      --panel-2: rgba(9, 8, 18, 0.9);
-      --panel-border: rgba(198, 176, 255, 0.11);
+      --border: rgba(203, 184, 255, 0.12);
+      --border-soft: rgba(255, 255, 255, 0.05);
 
-      --pill: rgba(41, 28, 68, 0.68);
-      --pill-2: rgba(24, 17, 41, 0.82);
-      --pill-border: rgba(206, 183, 255, 0.12);
+      --shadow-lg: 0 28px 70px rgba(0, 0, 0, 0.42);
+      --shadow-md: 0 18px 46px rgba(0, 0, 0, 0.3);
+      --glow: 0 0 40px rgba(126, 91, 255, 0.14);
 
-      --shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
-      --glow: 0 0 34px rgba(176, 120, 255, 0.12);
-
-      --radius-xl: 30px;
+      --hero-width: 980px;
+      --content-width: 980px;
+      --radius-xl: 28px;
       --radius-lg: 22px;
-
-      --max-width: 1320px;
-      --content-width: 1180px;
+      --radius-md: 18px;
     }
 
     * {
@@ -43,7 +45,7 @@
       font-family: Inter, Arial, sans-serif;
       color: var(--text);
       background:
-        linear-gradient(180deg, rgba(4, 3, 10, 0.34), rgba(4, 3, 10, 0.52)),
+        linear-gradient(180deg, rgba(6, 5, 13, 0.44), rgba(6, 5, 13, 0.62)),
         url("/chiron-background.png") center center / cover no-repeat fixed;
     }
 
@@ -53,8 +55,8 @@
       inset: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 50% 40%, rgba(146, 96, 255, 0.08), transparent 24%),
-        linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.16));
+        radial-gradient(circle at 50% 26%, rgba(121, 86, 255, 0.12), transparent 22%),
+        radial-gradient(circle at 50% 52%, rgba(84, 52, 182, 0.08), transparent 28%);
       z-index: 0;
     }
 
@@ -72,29 +74,26 @@
       position: relative;
       z-index: 1;
       width: 100%;
-      padding: 20px 18px 26px;
-    }
-
-    .container {
-      max-width: var(--max-width);
-      margin: 0 auto;
+      padding: 20px 24px 38px;
     }
 
     .hero {
       position: relative;
-      min-height: 760px;
-      border-radius: 34px;
+      width: min(var(--hero-width), 100%);
+      min-height: 690px;
+      margin: 0 auto;
+      padding: 22px 24px 28px;
+      border-radius: 32px;
       overflow: hidden;
       background:
-        radial-gradient(circle at 50% 42%, rgba(110, 74, 255, 0.16), transparent 30%),
-        linear-gradient(180deg, rgba(18, 16, 31, 0.72), rgba(10, 9, 19, 0.82));
-      border: 1px solid rgba(255, 255, 255, 0.05);
+        radial-gradient(circle at 50% 38%, rgba(109, 71, 255, 0.17), transparent 26%),
+        linear-gradient(180deg, rgba(17, 15, 31, 0.76), rgba(10, 9, 19, 0.9));
+      border: 1px solid var(--border-soft);
       box-shadow:
-        0 22px 70px rgba(0, 0, 0, 0.42),
+        var(--shadow-lg),
         inset 0 1px 0 rgba(255, 255, 255, 0.04);
       backdrop-filter: blur(18px) saturate(135%);
       -webkit-backdrop-filter: blur(18px) saturate(135%);
-      isolation: isolate;
     }
 
     .hero::before {
@@ -103,16 +102,15 @@
       inset: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 82% 18%, rgba(170, 118, 255, 0.07), transparent 18%),
-        radial-gradient(circle at 18% 75%, rgba(90, 65, 170, 0.08), transparent 22%);
+        radial-gradient(circle at 82% 18%, rgba(164, 120, 255, 0.08), transparent 18%),
+        radial-gradient(circle at 18% 78%, rgba(81, 54, 165, 0.08), transparent 24%);
       z-index: 0;
     }
 
     .hero-inner {
       position: relative;
-      z-index: 2;
-      min-height: 760px;
-      padding: 22px 24px 28px;
+      z-index: 1;
+      min-height: 640px;
       display: flex;
       flex-direction: column;
     }
@@ -127,161 +125,148 @@
     .brand-lockup {
       display: inline-flex;
       align-items: center;
+      gap: 12px;
       min-width: 0;
     }
 
-    .brand-full-wrap {
-      display: block;
-      width: min(420px, 30vw);
-      min-width: 220px;
-      filter:
-        drop-shadow(0 10px 24px rgba(0, 0, 0, 0.36))
-        drop-shadow(0 0 14px rgba(180, 137, 255, 0.12));
-    }
-
-    .brand-full-wrap img {
-      width: 100%;
-      height: auto;
-      display: block;
+    .brand-cube {
+      width: 38px;
+      height: 38px;
       object-fit: contain;
+      display: block;
+      flex-shrink: 0;
+      filter:
+        drop-shadow(0 8px 18px rgba(0, 0, 0, 0.32))
+        drop-shadow(0 0 14px rgba(132, 94, 255, 0.2));
     }
 
-    .hero-actions {
+    .brand-text {
       display: flex;
-      align-items: center;
-      gap: 12px;
+      flex-direction: column;
+      line-height: 1.02;
+      min-width: 0;
+    }
+
+    .brand-name {
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.96);
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    .brand-sub {
+      margin-top: 4px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(215, 208, 230, 0.72);
+      white-space: nowrap;
     }
 
     .signin-button {
       appearance: none;
-      min-height: 46px;
-      padding: 11px 20px;
+      min-height: 42px;
+      padding: 10px 16px;
+      border: 1px solid rgba(201, 178, 255, 0.16);
       border-radius: 999px;
-      border: 1px solid rgba(198, 171, 255, 0.16);
       background:
-        linear-gradient(180deg, rgba(31, 20, 50, 0.62), rgba(15, 10, 26, 0.76));
-      color: #f8f4ff;
-      font-size: 15px;
+        linear-gradient(180deg, rgba(29, 21, 46, 0.7), rgba(16, 12, 28, 0.82));
+      color: #faf7ff;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
-      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
       box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.04),
-        0 10px 24px rgba(0, 0, 0, 0.18),
-        0 0 20px rgba(176, 120, 255, 0.08);
-      backdrop-filter: blur(10px);
+        0 10px 20px rgba(0, 0, 0, 0.16);
+      transition: transform 0.16s ease, border-color 0.16s ease;
     }
 
     .signin-button:hover {
       transform: translateY(-1px);
       border-color: rgba(221, 199, 255, 0.24);
-      background:
-        linear-gradient(180deg, rgba(38, 25, 62, 0.68), rgba(17, 12, 29, 0.82));
     }
 
-    .hero-stage {
+    .hero-center {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px 0 0;
+      padding: 36px 0 10px;
     }
 
     .hero-copy {
       width: 100%;
-      max-width: 900px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      max-width: 760px;
       text-align: center;
-      padding-top: 24px;
     }
 
     .nexus-title {
       margin: 0;
-      font-size: clamp(76px, 10vw, 122px);
+      font-size: clamp(78px, 11vw, 120px);
       line-height: 0.92;
-      letter-spacing: -0.06em;
+      letter-spacing: -0.065em;
       font-weight: 800;
       color: #f8f6fb;
       text-shadow:
         0 12px 28px rgba(0, 0, 0, 0.28),
-        0 0 24px rgba(205, 170, 255, 0.08);
+        0 0 22px rgba(205, 170, 255, 0.08);
     }
 
     .nexus-subtitle {
-      margin-top: 10px;
-      font-size: clamp(22px, 2vw, 32px);
+      margin-top: 8px;
+      font-size: clamp(20px, 2vw, 30px);
       line-height: 1.2;
       font-weight: 500;
       color: #f1ebfb;
-      letter-spacing: -0.02em;
-      text-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
     }
 
     .nexus-description {
-      margin-top: 16px;
-      font-size: clamp(17px, 1.35vw, 22px);
+      margin-top: 12px;
+      font-size: clamp(16px, 1.3vw, 20px);
       line-height: 1.55;
-      color: #d8cdea;
-      letter-spacing: -0.01em;
-      text-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+      color: #d7d0e6;
     }
 
     .search-frame {
-      position: relative;
-      width: min(760px, 88vw);
-      margin-top: 30px;
-      display: grid;
-      place-items: center;
-    }
-
-    .search-shell {
-      position: relative;
-      z-index: 4;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
+      width: min(700px, 100%);
+      margin: 28px auto 0;
     }
 
     .search-box {
-      width: 100%;
       display: flex;
       align-items: stretch;
+      width: 100%;
       border-radius: 999px;
       overflow: hidden;
       background:
-        linear-gradient(90deg, rgba(28, 18, 52, 0.95), rgba(19, 16, 38, 0.96));
-      border: 1px solid rgba(145, 111, 255, 0.2);
+        linear-gradient(90deg, rgba(27, 18, 50, 0.96), rgba(18, 15, 37, 0.98));
+      border: 1px solid rgba(151, 118, 255, 0.18);
       box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.04),
-        0 0 0 1px rgba(186, 143, 255, 0.04),
         0 18px 42px rgba(0, 0, 0, 0.34),
-        0 0 34px rgba(176, 120, 255, 0.14);
-      backdrop-filter: blur(10px);
+        0 0 30px rgba(126, 91, 255, 0.16);
     }
 
     .search-box:focus-within {
-      border-color: rgba(224, 203, 255, 0.34);
+      border-color: rgba(220, 201, 255, 0.32);
       box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.05),
-        0 0 0 1px rgba(186, 143, 255, 0.06),
         0 18px 42px rgba(0, 0, 0, 0.34),
-        0 0 42px rgba(176, 120, 255, 0.22);
+        0 0 40px rgba(126, 91, 255, 0.22);
     }
 
     .search-input {
       flex: 1;
       min-width: 0;
       height: 72px;
-      padding: 0 26px;
+      padding: 0 24px;
+      border: 0;
+      outline: 0;
       background: transparent;
-      border: none;
-      outline: none;
-      color: #f5f1fb;
-      font-size: 19px;
+      color: var(--text);
+      font-size: 18px;
       letter-spacing: -0.01em;
     }
 
@@ -290,27 +275,25 @@
     }
 
     .search-button {
-      width: 78px;
-      border: none;
+      width: 76px;
+      border: 0;
       border-left: 1px solid rgba(255, 255, 255, 0.05);
       display: grid;
       place-items: center;
       cursor: pointer;
-      color: #f7f1ff;
-      background:
-        linear-gradient(180deg, rgba(111, 76, 255, 0.95), rgba(86, 58, 204, 0.96));
-      transition: opacity 0.18s ease, background 0.18s ease;
+      color: #fff;
+      background: linear-gradient(180deg, #7c5cff, #5a3fd6);
       box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.02);
+      transition: filter 0.16s ease;
     }
 
     .search-button:hover {
-      background:
-        linear-gradient(180deg, rgba(128, 92, 255, 0.98), rgba(94, 63, 216, 0.98));
+      filter: brightness(1.06);
     }
 
     .search-button:disabled {
+      opacity: 0.8;
       cursor: not-allowed;
-      opacity: 0.78;
     }
 
     .search-button svg {
@@ -319,24 +302,22 @@
     }
 
     .powered-by {
-      margin-top: 6px;
+      margin-top: 10px;
       text-align: center;
       color: #ddd3ee;
-      font-size: 16px;
-      letter-spacing: -0.02em;
-      text-shadow: 0 6px 18px rgba(0, 0, 0, 0.24);
+      font-size: 15px;
     }
 
     .powered-by strong {
-      font-weight: 700;
       color: #f7f3ff;
+      font-weight: 700;
     }
 
     .results-shell {
-      max-width: var(--content-width);
-      margin: 24px auto 0;
+      width: min(var(--content-width), 100%);
+      margin: 28px auto 0;
       display: grid;
-      grid-template-columns: 1.12fr 0.88fr;
+      grid-template-columns: 1.08fr 0.92fr;
       gap: 18px;
       align-items: start;
     }
@@ -348,12 +329,13 @@
     }
 
     .panel {
-      background: linear-gradient(180deg, var(--panel), var(--panel-2));
-      border: 1px solid var(--panel-border);
+      background: linear-gradient(180deg, var(--bg-panel), var(--bg-panel-2));
+      border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 22px;
-      box-shadow: var(--shadow), var(--glow);
+      box-shadow: var(--shadow-md), var(--glow);
       backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
     }
 
     .panel-header {
@@ -361,7 +343,7 @@
       align-items: flex-start;
       justify-content: space-between;
       gap: 14px;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .panel-title-wrap {
@@ -370,26 +352,26 @@
 
     .panel h2 {
       margin: 0;
-      font-size: 22px;
+      font-size: 20px;
       line-height: 1.1;
       letter-spacing: -0.03em;
     }
 
     .panel-subtitle {
-      margin-top: 7px;
+      margin-top: 6px;
       color: var(--muted-2);
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.55;
     }
 
     .status-badge {
       flex-shrink: 0;
       border-radius: 999px;
-      padding: 10px 14px;
+      padding: 9px 12px;
       font-size: 11px;
       font-weight: 800;
-      letter-spacing: 0.05em;
       text-transform: uppercase;
+      letter-spacing: 0.05em;
       border: 1px solid rgba(182, 140, 255, 0.18);
       background: rgba(120, 78, 216, 0.14);
       color: #f0e5ff;
@@ -414,9 +396,10 @@
     }
 
     .answer-text {
+      min-height: 140px;
       color: #ece8f7;
-      line-height: 1.82;
-      font-size: 16px;
+      line-height: 1.8;
+      font-size: 15px;
       word-break: break-word;
     }
 
@@ -439,19 +422,19 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 11px 14px;
+      padding: 10px 13px;
       border-radius: 999px;
-      font-size: 13px;
+      font-size: 12px;
       border: 1px solid transparent;
     }
 
     .meta-pill {
-      background: linear-gradient(180deg, var(--pill), var(--pill-2));
+      background: linear-gradient(180deg, var(--bg-pill), var(--bg-pill-2));
       color: #e6e0f3;
-      border-color: var(--pill-border);
+      border-color: rgba(206, 183, 255, 0.12);
       box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.03),
-        inset 0 -8px 14px rgba(0, 0, 0, 0.2);
+        inset 0 -8px 14px rgba(0, 0, 0, 0.18);
     }
 
     .meta-pill.high {
@@ -472,20 +455,6 @@
       border-color: rgba(252, 165, 165, 0.12);
     }
 
-    .source-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .source-pill {
-      background:
-        linear-gradient(180deg, rgba(39, 28, 62, 0.76), rgba(24, 18, 40, 0.82));
-      color: #e7ddf6;
-      border-color: rgba(205, 179, 255, 0.12);
-      text-decoration: none;
-    }
-
     .mini-stats {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -494,12 +463,12 @@
     }
 
     .stat-card {
-      min-height: 92px;
+      min-height: 88px;
+      padding: 16px;
+      border-radius: var(--radius-md);
       background:
         linear-gradient(180deg, rgba(26, 18, 44, 0.66), rgba(18, 12, 30, 0.76));
       border: 1px solid rgba(205, 179, 255, 0.12);
-      border-radius: 18px;
-      padding: 16px;
       box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.03),
         inset 0 -10px 16px rgba(0, 0, 0, 0.22);
@@ -512,42 +481,47 @@
     }
 
     .stat-value {
-      font-size: 19px;
+      font-size: 18px;
       font-weight: 700;
       color: var(--text);
       line-height: 1.2;
       word-break: break-word;
     }
 
+    .source-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .source-pill {
+      background:
+        linear-gradient(180deg, rgba(39, 28, 62, 0.76), rgba(24, 18, 40, 0.82));
+      color: #e7ddf6;
+      border-color: rgba(205, 179, 255, 0.12);
+    }
+
     .footer-note,
     .sources-note {
       margin-top: 14px;
       color: var(--muted-2);
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.6;
     }
 
     .site-footer {
-      max-width: var(--content-width);
-      margin: 22px auto 0;
+      width: min(var(--content-width), 100%);
+      margin: 20px auto 0;
+      padding: 0 4px;
+      text-align: center;
       color: #b9b1c9;
       font-size: 13px;
       line-height: 1.7;
-      padding: 0 4px;
-      text-align: center;
     }
 
-    @media (max-width: 1100px) {
+    @media (max-width: 900px) {
       body {
         background-attachment: scroll;
-      }
-
-      .hero {
-        min-height: 700px;
-      }
-
-      .hero-inner {
-        min-height: 700px;
       }
 
       .results-shell {
@@ -557,41 +531,44 @@
 
     @media (max-width: 780px) {
       .page {
-        padding: 14px 12px 34px;
+        padding: 14px 12px 30px;
       }
 
       .hero {
-        min-height: 640px;
+        min-height: 610px;
+        padding: 18px 16px 22px;
         border-radius: 24px;
-      }
-
-      .hero-inner {
-        min-height: 640px;
-        padding: 18px 16px 24px;
       }
 
       .hero-topbar {
         align-items: flex-start;
-        gap: 14px;
       }
 
-      .brand-full-wrap {
-        width: min(280px, 56vw);
-        min-width: 180px;
+      .brand-cube {
+        width: 32px;
+        height: 32px;
+      }
+
+      .brand-name {
+        font-size: 0.88rem;
+      }
+
+      .brand-sub {
+        font-size: 0.62rem;
       }
 
       .signin-button {
-        min-height: 42px;
-        padding: 10px 16px;
-        font-size: 14px;
+        min-height: 40px;
+        padding: 9px 14px;
+        font-size: 13px;
       }
 
-      .hero-copy {
-        padding-top: 18px;
+      .hero-center {
+        padding-top: 24px;
       }
 
       .nexus-title {
-        font-size: clamp(62px, 15vw, 92px);
+        font-size: clamp(58px, 16vw, 92px);
       }
 
       .nexus-subtitle {
@@ -600,34 +577,20 @@
 
       .nexus-description {
         font-size: 15px;
-        padding: 0 8px;
-      }
-
-      .search-frame {
-        width: 100%;
-        margin-top: 24px;
       }
 
       .search-input {
         height: 64px;
-        font-size: 17px;
+        font-size: 16px;
         padding: 0 20px;
       }
 
       .search-button {
-        width: 72px;
-      }
-
-      .powered-by {
-        font-size: 15px;
+        width: 70px;
       }
 
       .panel {
         padding: 20px;
-      }
-
-      .panel h2 {
-        font-size: 22px;
       }
 
       .mini-stats {
@@ -638,121 +601,117 @@
 </head>
 <body>
   <div class="page">
-    <div class="container">
-      <section class="hero">
-        <div class="hero-inner">
-          <div class="hero-topbar">
-            <a class="brand-lockup" href="#" aria-label="Modman Technologies LLC">
-              <div class="brand-full-wrap">
-                <img src="/modman-technologies-full.png" alt="Modman Technologies LLC logo" />
-              </div>
-            </a>
-
-            <div class="hero-actions">
-              <button class="signin-button" id="signin-button" type="button">Sign In</button>
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="hero-topbar">
+          <a class="brand-lockup" href="#" aria-label="Modman Technologies LLC">
+            <img src="/modman-technologies-icon.png" alt="Modman Technologies" class="brand-cube" />
+            <div class="brand-text">
+              <span class="brand-name">Modman Technologies</span>
+              <span class="brand-sub">Chiron Nexus</span>
             </div>
-          </div>
+          </a>
 
-          <div class="hero-stage">
-            <div class="hero-copy">
-              <h1 class="nexus-title">Nexus</h1>
-              <div class="nexus-subtitle">Trusted AI Intelligence</div>
-              <div class="nexus-description">Multi-model reasoning, verification &amp; synthesis</div>
+          <button class="signin-button" id="signin-button" type="button">Sign In</button>
+        </div>
 
-              <div class="search-frame">
-                <div class="search-shell">
-                  <div class="search-box">
-                    <input
-                      class="search-input"
-                      id="query"
-                      type="text"
-                      placeholder="Ask Nexus anything..."
-                      autocomplete="off"
-                    />
-                    <button class="search-button" id="search-button" type="button" aria-label="Search">
-                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/>
-                      </svg>
-                    </button>
-                  </div>
+        <div class="hero-center">
+          <div class="hero-copy">
+            <h1 class="nexus-title">Nexus</h1>
+            <div class="nexus-subtitle">Trusted AI Intelligence</div>
+            <div class="nexus-description">Multi-model reasoning, verification &amp; synthesis</div>
 
-                  <div class="powered-by">Powered by <strong>Chiron</strong></div>
-                </div>
+            <div class="search-frame">
+              <div class="search-box">
+                <input
+                  class="search-input"
+                  id="query"
+                  type="text"
+                  placeholder="Ask Nexus anything..."
+                  autocomplete="off"
+                />
+                <button class="search-button" id="search-button" type="button" aria-label="Search">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" />
+                  </svg>
+                </button>
               </div>
+
+              <div class="powered-by">Powered by <strong>Chiron</strong></div>
             </div>
           </div>
         </div>
-      </section>
-
-      <section class="results-shell" id="results-shell">
-        <div class="column">
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title-wrap">
-                <h2>Unified Answer</h2>
-                <div class="panel-subtitle">Final response area for the Chiron Nexus broker.</div>
-              </div>
-              <div class="status-badge" id="status-badge">Idle</div>
-            </div>
-
-            <div class="answer-text" id="unified-answer">
-              <p>Search results will appear here.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="column">
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title-wrap">
-                <h2>Answer Details</h2>
-                <div class="panel-subtitle">Provider, cache, confidence, access, and timing metadata.</div>
-              </div>
-            </div>
-
-            <div class="meta-grid">
-              <div class="meta-pill" id="pill-confidence">Confidence: --</div>
-              <div class="meta-pill" id="pill-provider">Provider: --</div>
-              <div class="meta-pill" id="pill-cached">Cached: --</div>
-              <div class="meta-pill" id="pill-response-time">Response Time: --</div>
-              <div class="meta-pill" id="pill-cache-type">Cache Type: --</div>
-              <div class="meta-pill" id="pill-access-tier">Access: Public</div>
-            </div>
-
-            <div class="mini-stats">
-              <div class="stat-card">
-                <div class="stat-label">Primary Provider</div>
-                <div class="stat-value" id="stat-primary-provider">--</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Current Access</div>
-                <div class="stat-value" id="stat-access-tier">PUBLIC</div>
-              </div>
-            </div>
-
-            <div class="footer-note" id="details-footer-note">
-              Route mode, caching, access state, and synthesis metadata will render here when backend search is connected.
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title-wrap">
-                <h2>AI Sources</h2>
-                <div class="panel-subtitle">Providers and source references returned by the API.</div>
-              </div>
-            </div>
-
-            <div class="source-list" id="ai-sources"></div>
-            <div class="sources-note" id="sources-note">Source links will appear here once live results are shown.</div>
-          </div>
-        </div>
-      </section>
-
-      <div class="site-footer">
-        Nexus is part of the Chiron AI platform, built by Modman Technologies LLC.
       </div>
+    </section>
+
+    <section class="results-shell" id="results-shell">
+      <div class="column">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <h2>Unified Answer</h2>
+              <div class="panel-subtitle">Final response area for the Chiron Nexus broker.</div>
+            </div>
+            <div class="status-badge" id="status-badge">Idle</div>
+          </div>
+
+          <div class="answer-text" id="unified-answer">
+            <p>Search results will appear here.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="column">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <h2>Answer Details</h2>
+              <div class="panel-subtitle">Provider, cache, confidence, access, and timing metadata.</div>
+            </div>
+          </div>
+
+          <div class="meta-grid">
+            <div class="meta-pill" id="pill-confidence">Confidence: --</div>
+            <div class="meta-pill" id="pill-provider">Provider: --</div>
+            <div class="meta-pill" id="pill-cached">Cached: --</div>
+            <div class="meta-pill" id="pill-response-time">Response Time: --</div>
+            <div class="meta-pill" id="pill-cache-type">Cache Type: --</div>
+            <div class="meta-pill" id="pill-access-tier">Access: Public</div>
+          </div>
+
+          <div class="mini-stats">
+            <div class="stat-card">
+              <div class="stat-label">Primary Provider</div>
+              <div class="stat-value" id="stat-primary-provider">--</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Current Access</div>
+              <div class="stat-value" id="stat-access-tier">PUBLIC</div>
+            </div>
+          </div>
+
+          <div class="footer-note" id="details-footer-note">
+            Route mode, caching, access state, and synthesis metadata will render here when backend search is connected.
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <h2>AI Sources</h2>
+              <div class="panel-subtitle">Providers and source references returned by the API.</div>
+            </div>
+          </div>
+
+          <div class="source-list" id="ai-sources"></div>
+          <div class="sources-note" id="sources-note">Source links will appear here once live results are shown.</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="site-footer">
+      Nexus is part of the Chiron AI platform, built by Modman Technologies LLC.
     </div>
   </div>
 
