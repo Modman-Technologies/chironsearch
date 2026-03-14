@@ -7,15 +7,20 @@
 
   <style>
     :root {
-      --bg: #090711;
-      --bg-2: #130d1d;
-      --panel: rgba(14, 18, 33, 0.82);
-      --panel-2: rgba(22, 29, 49, 0.76);
-      --border: rgba(160, 174, 208, 0.14);
       --text: #f8f7fb;
-      --muted: #c7c4d4;
-      --muted-2: #9a96ab;
-      --shadow: 0 24px 60px rgba(0, 0, 0, 0.40);
+      --muted: #d4cde4;
+      --muted-2: #a8a1ba;
+
+      --panel: rgba(11, 10, 22, 0.58);
+      --panel-2: rgba(10, 9, 20, 0.74);
+      --panel-border: rgba(198, 176, 255, 0.13);
+
+      --pill: rgba(41, 28, 68, 0.64);
+      --pill-2: rgba(24, 17, 41, 0.76);
+      --pill-border: rgba(206, 183, 255, 0.12);
+
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+      --glow: 0 0 34px rgba(176, 120, 255, 0.14);
 
       --radius-xl: 30px;
       --radius-lg: 22px;
@@ -39,8 +44,19 @@
       font-family: Inter, Arial, sans-serif;
       color: var(--text);
       background:
-        radial-gradient(circle at 50% 0%, rgba(136, 90, 214, 0.06), transparent 24%),
-        linear-gradient(180deg, #08060e 0%, #0b0811 42%, #08060d 100%);
+        linear-gradient(180deg, rgba(5, 4, 10, 0.40), rgba(5, 4, 10, 0.60)),
+        url("/chiron-background.png") center center / cover no-repeat fixed;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 44%, rgba(184, 126, 255, 0.12), transparent 24%),
+        linear-gradient(180deg, rgba(0,0,0,0.06), rgba(0,0,0,0.20));
+      z-index: 0;
     }
 
     a {
@@ -54,8 +70,10 @@
     }
 
     .page {
+      position: relative;
+      z-index: 1;
       width: 100%;
-      padding: 24px 18px 70px;
+      padding: 24px 18px 26px;
     }
 
     .container {
@@ -65,14 +83,12 @@
 
     .hero {
       position: relative;
-      overflow: hidden;
-      min-height: 930px;
+      min-height: 920px;
       border-radius: 34px;
-      border: 1px solid rgba(255,255,255,0.05);
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(8, 7, 14, 0.10), rgba(8, 7, 14, 0.22));
+      border: 1px solid rgba(255,255,255,0.04);
       box-shadow: var(--shadow);
-      background:
-        radial-gradient(circle at 50% 14%, rgba(211, 191, 255, 0.06), transparent 18%),
-        linear-gradient(180deg, rgba(27, 20, 37, 0.97), rgba(13, 10, 18, 0.98));
       isolation: isolate;
     }
 
@@ -80,51 +96,20 @@
       content: "";
       position: absolute;
       inset: 0;
-      z-index: 0;
-      background:
-        radial-gradient(circle at 50% 15%, rgba(255,255,255,0.03), transparent 18%),
-        radial-gradient(circle at 76% 40%, rgba(182, 127, 255, 0.05), transparent 18%);
       pointer-events: none;
-    }
-
-    .hero::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      opacity: 0.10;
       background:
-        repeating-linear-gradient(
-          90deg,
-          rgba(255,255,255,0.010) 0,
-          rgba(255,255,255,0.010) 1px,
-          transparent 1px,
-          transparent 8px
-        );
-      mix-blend-mode: soft-light;
-    }
-
-    .leather-grain {
-      position: absolute;
-      inset: 0;
+        radial-gradient(circle at 50% 48%, rgba(214, 188, 255, 0.05), transparent 22%),
+        radial-gradient(circle at 82% 22%, rgba(170, 118, 255, 0.07), transparent 16%);
       z-index: 0;
-      pointer-events: none;
-      opacity: 0.08;
-      background:
-        radial-gradient(circle at 20% 30%, rgba(255,255,255,0.028) 0 1px, transparent 1.6px),
-        radial-gradient(circle at 66% 24%, rgba(255,255,255,0.020) 0 1px, transparent 1.8px),
-        radial-gradient(circle at 58% 68%, rgba(255,255,255,0.018) 0 1px, transparent 1.8px);
-      background-size: 26px 26px, 34px 34px, 40px 40px;
-      filter: blur(0.25px);
-      mix-blend-mode: soft-light;
     }
 
     .hero-inner {
       position: relative;
-      z-index: 4;
-      min-height: 930px;
-      padding: 30px 36px 42px;
+      z-index: 2;
+      min-height: 920px;
+      padding: 30px 36px 38px;
+      display: flex;
+      flex-direction: column;
     }
 
     .hero-topbar {
@@ -137,7 +122,6 @@
     .brand-lockup {
       display: inline-flex;
       align-items: center;
-      gap: 16px;
       min-width: 0;
     }
 
@@ -146,8 +130,8 @@
       width: min(420px, 30vw);
       min-width: 220px;
       filter:
-        drop-shadow(0 10px 24px rgba(0,0,0,0.32))
-        drop-shadow(0 0 12px rgba(180,137,255,0.10));
+        drop-shadow(0 10px 24px rgba(0,0,0,0.36))
+        drop-shadow(0 0 14px rgba(180,137,255,0.12));
     }
 
     .brand-full-wrap img {
@@ -168,142 +152,92 @@
       min-height: 48px;
       padding: 11px 22px;
       border-radius: 999px;
-      border: 1px solid rgba(182, 140, 255, 0.22);
-      background: rgba(18, 13, 26, 0.48);
+      border: 1px solid rgba(198, 171, 255, 0.18);
+      background:
+        linear-gradient(180deg, rgba(31, 20, 50, 0.48), rgba(15, 10, 26, 0.58));
       color: #f8f4ff;
-      font-size: 17px;
+      font-size: 16px;
       font-weight: 600;
       cursor: pointer;
       transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.04),
-        0 10px 24px rgba(0,0,0,0.18);
+        0 10px 24px rgba(0,0,0,0.18),
+        0 0 20px rgba(176, 120, 255, 0.08);
+      backdrop-filter: blur(10px);
     }
 
     .signin-button:hover {
       transform: translateY(-1px);
-      border-color: rgba(213, 191, 255, 0.34);
-      background: rgba(26, 18, 37, 0.56);
+      border-color: rgba(221, 199, 255, 0.28);
+      background:
+        linear-gradient(180deg, rgba(38, 25, 62, 0.54), rgba(17, 12, 29, 0.66));
     }
 
     .hero-stage {
-      position: relative;
-      min-height: 770px;
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-
-    .embossed-chiron {
-      position: absolute;
-      top: 70px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: clamp(92px, 10vw, 162px);
-      line-height: 1;
-      font-weight: 800;
-      letter-spacing: 0.11em;
-      text-transform: uppercase;
-      color: rgba(10, 8, 12, 0.34);
-      text-shadow:
-        0 1px 0 rgba(255,255,255,0.02),
-        0 -1px 0 rgba(0,0,0,0.20);
-      white-space: nowrap;
-      pointer-events: none;
-      user-select: none;
-      z-index: 1;
-    }
-
-    .centaur-mark {
-      position: absolute;
-      left: 72px;
-      top: 140px;
-      width: min(350px, 28vw);
-      opacity: 0.10;
-      pointer-events: none;
-      user-select: none;
-      z-index: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .centaur-mark::before {
-      content: "♐";
-      font-size: clamp(120px, 16vw, 220px);
-      line-height: 1;
-      color: rgba(255,255,255,0.045);
-      text-shadow:
-        0 1px 0 rgba(255,255,255,0.02),
-        0 -1px 0 rgba(0,0,0,0.22);
+      padding: 48px 0 10px;
     }
 
     .hero-copy {
-      position: relative;
-      z-index: 4;
       width: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
       text-align: center;
-      padding-top: 80px;
+      padding-top: 170px;
     }
 
     .nexus-title {
       margin: 0;
-      font-size: clamp(96px, 12vw, 142px);
+      font-size: clamp(88px, 11vw, 138px);
       line-height: 0.95;
-      letter-spacing: -0.05em;
+      letter-spacing: -0.06em;
       font-weight: 700;
       color: #f8f6fb;
-      text-shadow: 0 12px 28px rgba(0,0,0,0.22);
+      text-shadow:
+        0 12px 28px rgba(0,0,0,0.30),
+        0 0 24px rgba(205, 170, 255, 0.10);
     }
 
     .nexus-subtitle {
-      margin-top: 18px;
-      font-size: clamp(26px, 2.4vw, 34px);
+      margin-top: 14px;
+      font-size: clamp(24px, 2.2vw, 34px);
       line-height: 1.22;
       font-weight: 400;
       color: #f1ebfb;
       letter-spacing: -0.02em;
+      text-shadow: 0 6px 18px rgba(0,0,0,0.24);
     }
 
     .nexus-description {
-      margin-top: 22px;
+      margin-top: 20px;
       font-size: clamp(18px, 1.5vw, 24px);
       line-height: 1.55;
       color: #ddd2ef;
       letter-spacing: -0.01em;
+      text-shadow: 0 6px 18px rgba(0,0,0,0.22);
     }
 
     .search-frame {
       position: relative;
-      width: min(1120px, 92vw);
-      height: 400px;
-      margin-top: 16px;
+      width: min(980px, 88vw);
+      margin-top: 38px;
       display: grid;
       place-items: center;
-    }
-
-    .orbit-svg {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      overflow: visible;
-      z-index: 2;
     }
 
     .search-shell {
       position: relative;
       z-index: 4;
-      width: min(900px, 86vw);
+      width: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 14px;
-      margin-top: 52px;
     }
 
     .search-box {
@@ -313,23 +247,23 @@
       border-radius: 999px;
       overflow: hidden;
       background:
-        linear-gradient(180deg, rgba(25, 16, 36, 0.95), rgba(19, 13, 28, 0.95));
-      border: 1px solid rgba(181, 140, 255, 0.26);
+        linear-gradient(180deg, rgba(26, 17, 38, 0.88), rgba(18, 13, 28, 0.92));
+      border: 1px solid rgba(198, 164, 255, 0.28);
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.04),
-        0 0 0 1px rgba(186, 143, 255, 0.04),
+        0 0 0 1px rgba(186, 143, 255, 0.05),
         0 18px 42px rgba(0,0,0,0.34),
-        0 0 34px rgba(176, 120, 255, 0.16);
-      backdrop-filter: blur(8px);
+        0 0 34px rgba(176, 120, 255, 0.18);
+      backdrop-filter: blur(10px);
     }
 
     .search-box:focus-within {
-      border-color: rgba(214, 191, 255, 0.42);
+      border-color: rgba(224, 203, 255, 0.42);
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.05),
         0 0 0 1px rgba(186, 143, 255, 0.08),
         0 18px 42px rgba(0,0,0,0.34),
-        0 0 42px rgba(176, 120, 255, 0.22);
+        0 0 46px rgba(176, 120, 255, 0.26);
     }
 
     .search-input {
@@ -346,7 +280,7 @@
     }
 
     .search-input::placeholder {
-      color: #b1a6c7;
+      color: #b9afd0;
     }
 
     .search-button {
@@ -358,14 +292,14 @@
       cursor: pointer;
       color: #f7f1ff;
       background:
-        radial-gradient(circle at center, rgba(190, 142, 255, 0.26), rgba(132, 77, 227, 0.22));
+        radial-gradient(circle at center, rgba(204, 164, 255, 0.28), rgba(132, 77, 227, 0.24));
       transition: opacity 0.18s ease, background 0.18s ease;
       box-shadow: inset 1px 0 0 rgba(255,255,255,0.02);
     }
 
     .search-button:hover {
       background:
-        radial-gradient(circle at center, rgba(210, 165, 255, 0.34), rgba(139, 82, 238, 0.28));
+        radial-gradient(circle at center, rgba(220, 181, 255, 0.36), rgba(139, 82, 238, 0.30));
     }
 
     .search-button:disabled {
@@ -379,15 +313,12 @@
     }
 
     .powered-by {
-      position: absolute;
-      left: 50%;
-      bottom: 34px;
-      transform: translateX(-50%);
-      z-index: 4;
+      margin-top: 22px;
       text-align: center;
       color: #e2d8f0;
       font-size: 21px;
       letter-spacing: -0.02em;
+      text-shadow: 0 6px 18px rgba(0,0,0,0.24);
     }
 
     .powered-by strong {
@@ -412,11 +343,11 @@
 
     .panel {
       background: linear-gradient(180deg, var(--panel), var(--panel-2));
-      border: 1px solid var(--border);
+      border: 1px solid var(--panel-border);
       border-radius: var(--radius-xl);
       padding: 28px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow), var(--glow);
+      backdrop-filter: blur(16px);
     }
 
     .panel-header {
@@ -477,7 +408,7 @@
     }
 
     .answer-text {
-      color: #e8eef8;
+      color: #ece8f7;
       line-height: 1.82;
       font-size: 17px;
       word-break: break-word;
@@ -510,9 +441,9 @@
 
     .meta-pill {
       background:
-        linear-gradient(180deg, rgba(44, 30, 72, 0.76), rgba(25, 17, 43, 0.82));
-      color: #e2e8f0;
-      border-color: rgba(205, 179, 255, 0.12);
+        linear-gradient(180deg, var(--pill), var(--pill-2));
+      color: #e6e0f3;
+      border-color: var(--pill-border);
       box-shadow:
         inset 0 1px 0 rgba(255,255,255,0.03),
         inset 0 -8px 14px rgba(0,0,0,0.20);
@@ -543,9 +474,10 @@
     }
 
     .source-pill {
-      background: rgba(30, 41, 59, 0.88);
-      color: #dbeafe;
-      border-color: rgba(96, 165, 250, 0.12);
+      background:
+        linear-gradient(180deg, rgba(39, 28, 62, 0.76), rgba(24, 18, 40, 0.82));
+      color: #e7ddf6;
+      border-color: rgba(205, 179, 255, 0.12);
       text-decoration: none;
     }
 
@@ -559,7 +491,7 @@
     .stat-card {
       min-height: 96px;
       background:
-        linear-gradient(180deg, rgba(28, 18, 46, 0.70), rgba(18, 12, 30, 0.78));
+        linear-gradient(180deg, rgba(26, 18, 44, 0.66), rgba(18, 12, 30, 0.76));
       border: 1px solid rgba(205, 179, 255, 0.12);
       border-radius: 18px;
       padding: 18px;
@@ -593,14 +525,18 @@
     .site-footer {
       max-width: var(--content-width);
       margin: 24px auto 0;
-      color: #a7afc0;
+      color: #b9b1c9;
       font-size: 13px;
       line-height: 1.7;
       padding: 0 4px;
-      text-align: left;
+      text-align: center;
     }
 
     @media (max-width: 1100px) {
+      body {
+        background-attachment: scroll;
+      }
+
       .hero {
         min-height: 860px;
       }
@@ -609,10 +545,8 @@
         min-height: 860px;
       }
 
-      .centaur-mark {
-        width: min(260px, 25vw);
-        left: 34px;
-        top: 170px;
+      .hero-copy {
+        padding-top: 155px;
       }
 
       .results-shell {
@@ -650,20 +584,8 @@
         font-size: 15px;
       }
 
-      .embossed-chiron {
-        top: 70px;
-        font-size: clamp(48px, 13vw, 82px);
-      }
-
-      .centaur-mark {
-        left: -12px;
-        top: 165px;
-        width: 165px;
-        opacity: 0.08;
-      }
-
       .hero-copy {
-        padding-top: 78px;
+        padding-top: 128px;
       }
 
       .nexus-title {
@@ -676,19 +598,12 @@
 
       .nexus-description {
         font-size: 15px;
-        padding: 0 10px;
-        text-align: center;
+        padding: 0 8px;
       }
 
       .search-frame {
         width: 100%;
-        height: 300px;
-        margin-top: 10px;
-      }
-
-      .search-shell {
-        width: 100%;
-        margin-top: 48px;
+        margin-top: 26px;
       }
 
       .search-input {
@@ -702,7 +617,6 @@
       }
 
       .powered-by {
-        bottom: 22px;
         font-size: 16px;
       }
 
@@ -717,10 +631,6 @@
       .mini-stats {
         grid-template-columns: 1fr;
       }
-
-      .site-footer {
-        text-align: center;
-      }
     }
   </style>
 </head>
@@ -728,8 +638,6 @@
   <div class="page">
     <div class="container">
       <section class="hero">
-        <div class="leather-grain"></div>
-
         <div class="hero-inner">
           <div class="hero-topbar">
             <a class="brand-lockup" href="#" aria-label="Modman Technologies LLC">
@@ -739,105 +647,17 @@
             </a>
 
             <div class="hero-actions">
-              <button class="signin-button" type="button">Sign In</button>
+              <button class="signin-button" id="signin-button" type="button">Sign In</button>
             </div>
           </div>
 
           <div class="hero-stage">
-            <div class="embossed-chiron">CHIRON</div>
-            <div class="centaur-mark" aria-hidden="true"></div>
-
             <div class="hero-copy">
               <h1 class="nexus-title">Nexus</h1>
               <div class="nexus-subtitle">Trusted AI Intelligence</div>
               <div class="nexus-description">Multi-model reasoning, verification &amp; synthesis</div>
 
               <div class="search-frame">
-                <svg class="orbit-svg" viewBox="0 0 1120 400" aria-hidden="true">
-                  <defs>
-                    <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
-                      <feGaussianBlur stdDeviation="4" result="blur" />
-                      <feMerge>
-                        <feMergeNode in="blur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-
-                    <filter id="hardGlow" x="-80%" y="-80%" width="260%" height="260%">
-                      <feGaussianBlur stdDeviation="7" result="blur1" />
-                      <feGaussianBlur stdDeviation="14" result="blur2" />
-                      <feMerge>
-                        <feMergeNode in="blur2" />
-                        <feMergeNode in="blur1" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                  </defs>
-
-                  <path
-                    d="M300 120 C520 120, 770 108, 980 64"
-                    fill="none"
-                    stroke="rgba(215,194,255,0.22)"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  />
-
-                  <path
-                    d="M124 290
-                       C104 307, 104 330, 138 342
-                       C245 380, 550 384, 826 356
-                       C980 340, 1060 286, 1072 206
-                       C1077 173, 1068 146, 1048 126"
-                    fill="none"
-                    stroke="rgba(230,215,255,0.74)"
-                    stroke-width="4"
-                    stroke-linecap="round"
-                    filter="url(#softGlow)"
-                  />
-
-                  <path
-                    d="M130 290
-                       C116 306, 120 324, 156 338
-                       C268 378, 558 378, 826 352
-                       C972 338, 1054 288, 1068 214"
-                    fill="none"
-                    stroke="rgba(152,96,255,0.34)"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    filter="url(#softGlow)"
-                  />
-
-                  <path
-                    d="M970 64 L1072 42"
-                    fill="none"
-                    stroke="rgba(252,247,255,0.94)"
-                    stroke-width="3.5"
-                    stroke-linecap="round"
-                    filter="url(#hardGlow)"
-                  />
-
-                  <polygon
-                    points="1072,42 1044,34 1056,54"
-                    fill="rgba(255,250,255,0.98)"
-                    filter="url(#hardGlow)"
-                  />
-
-                  <path
-                    d="M1050 140
-                       C1084 166, 1084 224, 1048 256"
-                    fill="none"
-                    stroke="rgba(235,223,255,0.62)"
-                    stroke-width="3"
-                    stroke-linecap="round"
-                    filter="url(#softGlow)"
-                  />
-
-                  <circle cx="126" cy="290" r="4.2" fill="rgba(246,238,255,0.82)" filter="url(#hardGlow)" />
-                  <circle cx="803" cy="355" r="2.8" fill="rgba(246,238,255,0.56)" filter="url(#softGlow)" />
-                  <circle cx="972" cy="64" r="3.2" fill="rgba(246,238,255,0.76)" filter="url(#softGlow)" />
-                  <circle cx="1070" cy="42" r="4.6" fill="rgba(255,248,255,0.96)" filter="url(#hardGlow)" />
-                </svg>
-
                 <div class="search-shell">
                   <div class="search-box">
                     <input
@@ -854,11 +674,11 @@
                       </svg>
                     </button>
                   </div>
+
+                  <div class="powered-by">Powered by <strong>Chiron</strong></div>
                 </div>
               </div>
             </div>
-
-            <div class="powered-by">Powered by <strong>Chiron</strong></div>
           </div>
         </div>
       </section>
@@ -937,6 +757,7 @@
   <script>
     const queryInput = document.getElementById("query");
     const searchButton = document.getElementById("search-button");
+    const signinButton = document.getElementById("signin-button");
     const unifiedAnswer = document.getElementById("unified-answer");
     const statusBadge = document.getElementById("status-badge");
     const pillConfidence = document.getElementById("pill-confidence");
@@ -1067,6 +888,10 @@
     });
 
     searchButton.addEventListener("click", goSearch);
+
+    signinButton.addEventListener("click", () => {
+      window.location.href = "/sign-in";
+    });
   </script>
 </body>
 </html>
