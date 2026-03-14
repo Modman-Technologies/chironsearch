@@ -3,237 +3,339 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chiron Nexus — Auth Test</title>
+<title>Nexus — Trusted AI Intelligence</title>
 
 <script
-  id="clerk-script"
-  crossorigin="anonymous"
-  data-clerk-publishable-key="pk_test_Z3Jvd24tamVubmV0LTMyLmNsZXJrLmFjY291bnRzLmRldiQ"
-  src="https://grown-jennet-32.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js">
+async
+crossorigin="anonymous"
+data-clerk-publishable-key="pk_test_Z3Jvd24tamVubmV0LTMyLmNsZXJrLmFjY291bnRzLmRldiQ"
+src="https://grown-jennet-32.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js">
 </script>
 
 <style>
+
+:root{
+--text:#f2f1f8;
+--muted:#a9a4c3;
+--panel:rgba(12,10,20,.65);
+--panel-border:rgba(180,160,255,.15);
+--accent:#7b6cff;
+}
+
+*{box-sizing:border-box}
+
 body{
-  font-family: Arial, sans-serif;
-  margin:40px;
-  max-width:900px;
+margin:0;
+font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;
+color:var(--text);
+
+background-image:url("/background.png");
+background-size:cover;
+background-position:center;
+background-attachment:fixed;
+}
+
+body::before{
+content:"";
+position:fixed;
+inset:0;
+background:linear-gradient(
+rgba(6,6,10,.65),
+rgba(6,6,10,.85)
+);
+z-index:-1;
+}
+
+/* HEADER */
+
+header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:20px 40px;
+}
+
+.logo{
+height:40px;
+}
+
+.account{
+display:flex;
+gap:10px;
 }
 
 button{
-  padding:10px 16px;
-  margin:6px 6px 6px 0;
-  cursor:pointer;
+background:var(--panel);
+border:1px solid var(--panel-border);
+color:var(--text);
+padding:8px 14px;
+border-radius:6px;
+cursor:pointer;
 }
 
-input{
-  padding:10px 12px;
-  width:260px;
-  margin-right:8px;
+/* HERO */
+
+.hero{
+text-align:center;
+padding:80px 20px 60px;
 }
 
-pre{
-  background:#f5f5f5;
-  padding:12px;
-  overflow:auto;
-  white-space:pre-wrap;
-  word-break:break-word;
-  min-height:180px;
+.hero h1{
+font-size:64px;
+letter-spacing:6px;
+margin:0;
+font-weight:600;
 }
 
-.muted{
-  color:#666;
+.hero p{
+margin-top:12px;
+color:var(--muted);
 }
+
+/* SEARCH */
+
+.searchbar{
+margin-top:30px;
+display:flex;
+justify-content:center;
+gap:10px;
+}
+
+.searchbar input{
+width:420px;
+padding:14px;
+border-radius:8px;
+border:1px solid var(--panel-border);
+background:rgba(20,18,35,.7);
+color:var(--text);
+}
+
+.searchbar button{
+padding:14px 20px;
+}
+
+/* MAIN GRID */
+
+.main{
+max-width:1300px;
+margin:auto;
+padding:40px;
+display:grid;
+grid-template-columns:2fr 1fr;
+gap:40px;
+}
+
+/* ANSWER */
+
+.answer{
+background:var(--panel);
+border:1px solid var(--panel-border);
+padding:30px;
+border-radius:10px;
+line-height:1.6;
+min-height:200px;
+}
+
+/* INSIGHT PANEL */
+
+.insight{
+background:var(--panel);
+border:1px solid var(--panel-border);
+padding:24px;
+border-radius:10px;
+}
+
+.insight h3{
+margin-top:0;
+margin-bottom:16px;
+font-size:18px;
+}
+
+.row{
+display:flex;
+justify-content:space-between;
+padding:8px 0;
+border-bottom:1px solid rgba(255,255,255,.05);
+font-size:14px;
+color:var(--muted);
+}
+
+/* SOURCES */
+
+.sources{
+max-width:1300px;
+margin:20px auto 80px;
+padding:0 40px;
+}
+
+.sources h3{
+margin-bottom:12px;
+}
+
+.source{
+margin-bottom:8px;
+}
+
+.source a{
+color:#c8c4ff;
+text-decoration:none;
+}
+
+/* FOOTER */
+
+footer{
+text-align:center;
+padding:30px;
+color:var(--muted);
+font-size:13px;
+}
+
+@media (max-width:900px){
+
+.main{
+grid-template-columns:1fr;
+}
+
+.hero h1{
+font-size:42px;
+}
+
+.searchbar input{
+width:100%;
+}
+
+}
+
 </style>
-
 </head>
+
 <body>
 
-<h1>Chiron Nexus — Auth Test</h1>
+<header>
 
-<div id="auth-state">Loading...</div>
+<img src="/modman-technologies-full.png" class="logo">
 
+<div class="account">
 <button id="signin">Sign In</button>
 <button id="signout">Sign Out</button>
+</div>
 
-<h2>User Info</h2>
+</header>
 
-<div>Email: <span id="email">--</span></div>
-<div>User ID: <span id="userid">--</span></div>
-<div>Access Tier: <span id="tier">--</span></div>
+<section class="hero">
 
-<h2>Search API Test</h2>
+<h1>NEXUS</h1>
+<p>Trusted AI Intelligence</p>
 
-<input id="query" value="weather today">
-<button id="run">Run Search</button>
+<div class="searchbar">
+<input id="query" placeholder="Search Nexus…" />
+<button id="searchBtn">Search</button>
+</div>
 
-<pre id="result"></pre>
+</section>
+
+<section class="main">
+
+<div class="answer" id="answer">
+Ask a question to begin.
+</div>
+
+<div class="insight">
+
+<h3>Insight</h3>
+
+<div class="row"><span>Access</span><span id="tier">--</span></div>
+<div class="row"><span>Provider</span><span id="provider">--</span></div>
+<div class="row"><span>Confidence</span><span id="confidence">--</span></div>
+<div class="row"><span>Cache</span><span id="cache">--</span></div>
+<div class="row"><span>Latency</span><span id="latency">--</span></div>
+
+</div>
+
+</section>
+
+<section class="sources">
+
+<h3>Sources</h3>
+<div id="sources"></div>
+
+</section>
+
+<footer>
+
+Nexus is part of the Chiron AI platform, built by Modman Technologies LLC.
+
+</footer>
 
 <script>
 
-let clerk = null;
-
-const authState = document.getElementById("auth-state");
-const emailEl = document.getElementById("email");
-const userIdEl = document.getElementById("userid");
-const tierEl = document.getElementById("tier");
-const resultEl = document.getElementById("result");
-const queryEl = document.getElementById("query");
-
-const signInBtn = document.getElementById("signin");
-const signOutBtn = document.getElementById("signout");
-const runBtn = document.getElementById("run");
-
-
-function setSignedOut(){
-  authState.innerText="Not signed in";
-  emailEl.innerText="--";
-  userIdEl.innerText="--";
-  tierEl.innerText="--";
-}
-
-function updateAuth(){
-
-  if(!clerk || !clerk.user){
-    setSignedOut();
-    return;
-  }
-
-  const user = clerk.user;
-  const email = user.primaryEmailAddress?.emailAddress || "--";
-
-  authState.innerText="Signed in";
-  emailEl.innerText=email;
-  userIdEl.innerText=user.id;
-}
+let clerk=null;
 
 async function init(){
 
-  if(!window.Clerk){
-    authState.innerText="Clerk failed to load";
-    return;
-  }
+if(!window.Clerk){
+console.error("Clerk failed to load");
+return;
+}
 
-  clerk = window.Clerk;
+clerk=window.Clerk;
+await clerk.load();
 
-  await clerk.load();
+document.getElementById("signin").onclick=()=>clerk.openSignIn();
 
-  updateAuth();
+document.getElementById("signout").onclick=()=>clerk.signOut();
 
-  clerk.addListener(({user})=>{
-    if(!user){
-      setSignedOut();
-      return;
-    }
-    updateAuth();
-  });
-
-  signInBtn.onclick=()=>{
-    clerk.openSignIn();
-  };
-
-  signOutBtn.onclick=async()=>{
-    await clerk.signOut();
-    setSignedOut();
-    resultEl.innerText="";
-  };
-
-  runBtn.onclick=runSearch;
-
-  queryEl.addEventListener("keydown",(e)=>{
-    if(e.key==="Enter"){
-      runSearch();
-    }
-  });
+document.getElementById("searchBtn").onclick=runSearch;
 
 }
 
 async function runSearch(){
 
-  const q=queryEl.value.trim();
+const q=document.getElementById("query").value.trim();
 
-  if(!q){
-    resultEl.innerText="Enter a query.";
-    return;
-  }
+if(!q)return;
 
-  if(!clerk){
-    resultEl.innerText="Clerk not initialized.";
-    return;
-  }
+let token="";
 
-  let token="";
+if(clerk.session){
+token=await clerk.session.getToken({skipCache:true});
+}
 
-  try{
-    if(clerk.session){
-      token = await clerk.session.getToken({skipCache:true});
-    }
-  }catch(err){
-    console.error("Token error",err);
-  }
+const headers={"Content-Type":"application/json"};
 
-  resultEl.innerText="Running search...";
+if(token)headers.Authorization=`Bearer ${token}`;
 
-  try{
+const res=await fetch("/api/search",{
+method:"POST",
+headers,
+body:JSON.stringify({query:q})
+});
 
-    const headers={
-      "Content-Type":"application/json"
-    };
+const data=await res.json();
 
-    if(token){
-      headers["Authorization"]=`Bearer ${token}`;
-    }
+document.getElementById("answer").innerText=data.answer||"No answer";
 
-    const res = await fetch("/api/search",{
-      method:"POST",
-      headers,
-      body:JSON.stringify({query:q})
-    });
+document.getElementById("tier").innerText=data.access_tier||"--";
+document.getElementById("provider").innerText=data.provider||"--";
+document.getElementById("confidence").innerText=data.confidence||"--";
+document.getElementById("cache").innerText=data.cache_type||"--";
+document.getElementById("latency").innerText=data.response_time_ms+" ms";
 
-    const text = await res.text();
+const src=document.getElementById("sources");
+src.innerHTML="";
 
-    let data;
-
-    try{
-      data = JSON.parse(text);
-    }catch{
-      resultEl.innerText=text;
-      return;
-    }
-
-    tierEl.innerText = data.access_tier || "--";
-
-    resultEl.innerText = JSON.stringify(data,null,2);
-
-  }catch(err){
-
-    resultEl.innerText="Search failed: "+err.message;
-
-  }
+if(data.source_links){
+data.source_links.forEach(s=>{
+const div=document.createElement("div");
+div.className="source";
+div.innerHTML=`<a href="${s.url}" target="_blank">${s.title}</a>`;
+src.appendChild(div);
+});
+}
 
 }
 
-
-/* wait for clerk script to load */
-
-const clerkScript=document.getElementById("clerk-script");
-
-if(window.Clerk){
-  init();
-}
-else if(clerkScript){
-
-  clerkScript.addEventListener("load",()=>{
-    init();
-  });
-
-  clerkScript.addEventListener("error",()=>{
-    authState.innerText="Clerk script failed to load";
-  });
-
-}
-else{
-  authState.innerText="Clerk script tag missing";
-}
+document.addEventListener("DOMContentLoaded",init);
 
 </script>
 
