@@ -1,5 +1,6 @@
 import { kv } from "@vercel/kv";
 import crypto from "crypto";
+import { verifyToken } from "@clerk/backend";
 
 const SEARCH_ENABLED = process.env.SEARCH_ENABLED !== "false";
 const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
@@ -75,6 +76,7 @@ const DEEPSEEK_MODEL =
   "deepseek-chat";
 
 const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY || "";
+const CLERK_JWT_KEY = process.env.CLERK_JWT_KEY || "";
 
 const ALLOWED_ORIGINS = [
   "https://chironnexus.com",
@@ -89,6 +91,7 @@ const HISTORICAL_DECADE_REGEX = /\b(1[6-9]\d0s)\b/i;
 
 const ACCESS_TIERS = {
   PUBLIC: "public",
+  FREE: "free",
   PAID: "paid",
   ADMIN: "admin"
 };
@@ -524,37 +527,25 @@ async function fetchJson(url, options = {}, label = "Request") {
 }
 
 async function verifyClerkSessionToken(sessionToken) {
-  if (!sessionToken || !CLERK_SECRET_KEY) {
-    authLog("verifyClerkSessionToken skipped:", {
-      hasSessionToken: Boolean(sessionToken),
-      hasClerkSecret: Boolean(CLERK_SECRET_KEY)
-    });
+  if (!sessionToken) {
+    authLog("verifyClerkSessionToken skipped: no session token");
+    return null;
+  }
+
+  if (!CLERK_SECRET_KEY && !CLERK_JWT_KEY) {
+    authLog("verifyClerkSessionToken skipped: missing CLERK_SECRET_KEY and CLERK_JWT_KEY");
     return null;
   }
 
   try {
-    const { response, data } = await fetchJson(
-      "https://api.clerk.com/v1/sessions/verify",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${CLERK_SECRET_KEY}`
-        },
-        body: JSON.stringify({
-          token: sessionToken
-        })
-      },
-      "Clerk session verify"
-    );
-
-    if (!response.ok || !data) {
-      authLog("Clerk verify failed:", response.status);
-      return null;
-    }
+    const verifiedToken = await verifyToken(sessionToken, {
+      secretKey: CLERK_SECRET_KEY || undefined,
+      jwtKey: CLERK_JWT_KEY || undefined,
+      authorizedParties: ALLOWED_ORIGINS
+    });
 
     authLog("Clerk verify success");
-    return data;
+    return verifiedToken;
   } catch (error) {
     authLog("Clerk verify error:", error?.message || error);
     return null;
@@ -608,6 +599,19 @@ function getAdminIdentifiers() {
   };
 }
 
+function getPaidIdentifiers() {
+  return {
+    userIds: getEnvAny("CHIRON_PAID_USER_IDS")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+    emails: getEnvAny("CHIRON_PAID_EMAILS")
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+  };
+}
+
 function getPrimaryEmailFromClerkUser(user) {
   if (!user) return "";
 
@@ -624,8 +628,8 @@ function getPrimaryEmailFromClerkUser(user) {
 }
 
 async function getVerifiedIdentity(req) {
-  if (!CLERK_SECRET_KEY) {
-    authLog("No CLERK_SECRET_KEY present");
+  if (!CLERK_SECRET_KEY && !CLERK_JWT_KEY) {
+    authLog("No CLERK_SECRET_KEY or CLERK_JWT_KEY present");
     return null;
   }
 
@@ -657,11 +661,7 @@ async function getVerifiedIdentity(req) {
     return null;
   }
 
-  const userId =
-    verifiedSession.sub ||
-    verifiedSession.user_id ||
-    verifiedSession.user?.id ||
-    "";
+  const userId = verifiedSession.sub || "";
 
   authLog("Resolved userId from session:", userId || null);
 
@@ -696,12 +696,13 @@ async function getVerifiedIdentity(req) {
 
 /*
   Access model:
-  - PUBLIC: default, cache-only
-  - PAID: verified signed-in user
-  - ADMIN: verified signed-in admin or temporary admin secret fallback
+  - PUBLIC: unauthenticated, cache-only
+  - FREE: authenticated, cache-only
+  - PAID: authenticated + paid allowlist, live search allowed
+  - ADMIN: authenticated + admin allowlist or admin key, unrestricted
 
   IMPORTANT:
-  - Client-supplied "paid" headers are not trusted.
+  - Client-supplied tier headers are never trusted.
   - Backend/session is the source of truth.
 */
 async function getLiveAccessMode(req) {
@@ -709,6 +710,7 @@ async function getLiveAccessMode(req) {
 
   if (identity?.userId) {
     const admins = getAdminIdentifiers();
+    const paid = getPaidIdentifiers();
 
     const normalizedEmail = String(identity.email || "").trim().toLowerCase();
     const normalizedUserId = String(identity.userId || "").trim();
@@ -718,8 +720,15 @@ async function getLiveAccessMode(req) {
     const adminUserIdMatch =
       Boolean(normalizedUserId) && admins.userIds.includes(normalizedUserId);
 
+    const paidEmailMatch =
+      Boolean(normalizedEmail) && paid.emails.includes(normalizedEmail);
+    const paidUserIdMatch =
+      Boolean(normalizedUserId) && paid.userIds.includes(normalizedUserId);
+
     authLog("Admin email match:", adminEmailMatch);
     authLog("Admin userId match:", adminUserIdMatch);
+    authLog("Paid email match:", paidEmailMatch);
+    authLog("Paid userId match:", paidUserIdMatch);
 
     if (adminUserIdMatch || adminEmailMatch) {
       authLog("Resolved access tier:", ACCESS_TIERS.ADMIN);
@@ -729,9 +738,17 @@ async function getLiveAccessMode(req) {
       };
     }
 
-    authLog("Resolved access tier:", ACCESS_TIERS.PAID);
+    if (paidUserIdMatch || paidEmailMatch) {
+      authLog("Resolved access tier:", ACCESS_TIERS.PAID);
+      return {
+        accessTier: ACCESS_TIERS.PAID,
+        identity
+      };
+    }
+
+    authLog("Resolved access tier:", ACCESS_TIERS.FREE);
     return {
-      accessTier: ACCESS_TIERS.PAID,
+      accessTier: ACCESS_TIERS.FREE,
       identity
     };
   }
@@ -758,6 +775,10 @@ function isLiveSearchAllowed(accessTier) {
   return accessTier === ACCESS_TIERS.PAID || accessTier === ACCESS_TIERS.ADMIN;
 }
 
+function isCacheOnlyTier(accessTier) {
+  return accessTier === ACCESS_TIERS.PUBLIC || accessTier === ACCESS_TIERS.FREE;
+}
+
 function shouldForceLiveSearch(req, accessTier) {
   if (accessTier !== ACCESS_TIERS.ADMIN) {
     return false;
@@ -766,10 +787,19 @@ function shouldForceLiveSearch(req, accessTier) {
   return getHeader(req, "x-chiron-force-live").toLowerCase() === "true";
 }
 
-function buildPublicCacheMissResponse(normalizedQuery, queryType, requestStart) {
+function buildCacheMissAccessResponse({
+  normalizedQuery,
+  queryType,
+  queryDifficulty,
+  requestStart,
+  accessTier
+}) {
+  const isFree = accessTier === ACCESS_TIERS.FREE;
+
   return {
-    answer:
-      "No cached answer is available for that search yet. Live search is currently limited to authorized users.",
+    answer: isFree
+      ? "No cached answer is available for that search yet. Fresh searches are available on paid accounts."
+      : "No cached answer is available for that search yet. Sign in or upgrade to access fresh searches.",
     sources: [],
     source_links: [],
     reference_image: null,
@@ -777,7 +807,7 @@ function buildPublicCacheMissResponse(normalizedQuery, queryType, requestStart) 
     provider: "chiron-cache",
     confidence: "low",
     query_type: queryType,
-    query_difficulty: "unknown",
+    query_difficulty: queryDifficulty,
     route_mode: "cache-only",
     panel_size_initial: 0,
     panel_size_final: 0,
@@ -788,7 +818,7 @@ function buildPublicCacheMissResponse(normalizedQuery, queryType, requestStart) 
     cached: false,
     cache_type: "miss",
     response_time_ms: Date.now() - requestStart,
-    access_tier: ACCESS_TIERS.PUBLIC,
+    access_tier: accessTier,
     live_search_used: false,
     live_search_available: false,
     cache_only_mode: true,
@@ -2809,6 +2839,7 @@ export default async function handler(req, res) {
   const accessContext = await getLiveAccessMode(req);
   const accessTier = accessContext.accessTier;
   const liveSearchAllowed = isLiveSearchAllowed(accessTier);
+  const cacheOnlyMode = isCacheOnlyTier(accessTier);
   const forceLive = shouldForceLiveSearch(req, accessTier);
 
   await incrementMetricDual("request_total");
@@ -2947,7 +2978,7 @@ export default async function handler(req, res) {
           access_tier: accessTier,
           live_search_used: false,
           live_search_available: liveSearchAllowed,
-          cache_only_mode: accessTier === ACCESS_TIERS.PUBLIC
+          cache_only_mode: cacheOnlyMode
         });
       }
 
@@ -2966,7 +2997,7 @@ export default async function handler(req, res) {
             access_tier: accessTier,
             live_search_used: false,
             live_search_available: liveSearchAllowed,
-            cache_only_mode: accessTier === ACCESS_TIERS.PUBLIC
+            cache_only_mode: cacheOnlyMode
           });
         }
       }
@@ -2976,15 +3007,16 @@ export default async function handler(req, res) {
 
     if (!liveSearchAllowed) {
       const queueMeta = await markPublicCacheMissRequest(normalizedQuery);
-      const missResponse = buildPublicCacheMissResponse(
+      const missResponse = buildCacheMissAccessResponse({
         normalizedQuery,
         queryType,
-        requestStart
-      );
+        queryDifficulty,
+        requestStart,
+        accessTier
+      });
 
       return res.status(200).json({
         ...missResponse,
-        query_difficulty: queryDifficulty,
         request_queued: Boolean(queueMeta),
         request_queue_count: queueMeta?.count || 0,
         first_requested_at: queueMeta?.first_requested_at || null,
@@ -3227,7 +3259,7 @@ export default async function handler(req, res) {
       access_tier: accessTier,
       live_search_used: true,
       live_search_available: liveSearchAllowed,
-      cache_only_mode: accessTier === ACCESS_TIERS.PUBLIC
+      cache_only_mode: cacheOnlyMode
     };
 
     if (finalAnswer) {
