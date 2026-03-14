@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chiron Nexus</title>
+
+  <style>
+    :root {
+      --text: #f8f7fb;
+      --muted: #d4cde4;
+      --muted-2: #a8a1ba;
+
+      --panel: rgba(11, 10, 22, 0.58);
+      --panel-2: rgba(10, 9, 20, 0.74);
+      --panel-border: rgba(198, 176, 255, 0.13);
+
+      --pill: rgba(41, 28, 68, 0.64);
+      --pill-2: rgba(24, 17, 41, 0.76);
+      --pill-border: rgba(206, 183, 255, 0.12);
+
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+      --glow: 0 0 34px rgba(176, 120, 255, 0.14);
+
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+
+      --max-width: 1320px;
+      --content-width: 1180px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, Arial, sans-serif;
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(5, 4, 10, 0.38), rgba(5, 4, 10, 0.58)),
+        url("/chiron-background.png") center center / cover no-repeat fixed;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 44%, rgba(184, 126, 255, 0.10), transparent 24%),
+        linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.18));
+      z-index: 0;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      padding: 24px 18px 26px;
+    }
+
+    .container {
+      max-width: var(--max-width);
+      margin: 0 auto;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 900px;
+      border-radius: 34px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(8, 7, 14, 0.10), rgba(8, 7, 14, 0.20));
+      border: 1px solid rgba(255,255,255,0.04);
+      box-shadow: var(--shadow);
+      isolation: isolate;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 48%, rgba(214, 188, 255, 0.05), transparent 22%),
+        radial-gradient(circle at 82% 22%, rgba(170, 118, 255, 0.06), transparent 16%);
+      z-index: 0;
+    }
+
+    .hero-inner {
+      position: relative;
+      z-index: 2;
+      min-height: 900px;
+      padding: 30px 36px 38px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hero-topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand-lockup {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .brand-full-wrap {
+      display: block;
+      width: min(420px, 30vw);
+      min-width: 220px;
+      filter:
+        drop-shadow(0 10px 24px rgba(0,0,0,0.36))
+        drop-shadow(0 0 14px rgba(180,137,255,0.12));
+    }
+
+    .brand-full-wrap img {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: contain;
+    }
+
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .signin-button {
+      appearance: none;
+      min-height: 48px;
+      padding: 11px 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(198, 171, 255, 0.18);
+      background:
+        linear-gradient(180deg, rgba(31, 20, 50, 0.48), rgba(15, 10, 26, 0.58));
+      color: #f8f4ff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.04),
+        0 10px 24px rgba(0,0,0,0.18),
+        0 0 20px rgba(176, 120, 255, 0.08);
+      backdrop-filter: blur(10px);
+    }
+
+    .signin-button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(221, 199, 255, 0.28);
+      background:
+        linear-gradient(180deg, rgba(38, 25, 62, 0.54), rgba(17, 12, 29, 0.66));
+    }
+
+    .hero-stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 0 10px;
+    }
+
+    .hero-copy {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding-top: 170px;
+    }
+
+    .nexus-title {
+      margin: 0;
+      font-size: clamp(88px, 11vw, 138px);
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+      font-weight: 700;
+      color: #f8f6fb;
+      text-shadow:
+        0 12px 28px rgba(0,0,0,0.30),
+        0 0 24px rgba(205, 170, 255, 0.10);
+    }
+
+    .nexus-subtitle {
+      margin-top: 14px;
+      font-size: clamp(24px, 2.2vw, 34px);
+      line-height: 1.22;
+      font-weight: 400;
+      color: #f1ebfb;
+      letter-spacing: -0.02em;
+      text-shadow: 0 6px 18px rgba(0,0,0,0.24);
+    }
+
+    .nexus-description {
+      margin-top: 20px;
+      font-size: clamp(18px, 1.5vw, 24px);
+      line-height: 1.55;
+      color: #ddd2ef;
+      letter-spacing: -0.01em;
+      text-shadow: 0 6px 18px rgba(0,0,0,0.22);
+    }
+
+    .search-frame {
+      position: relative;
+      width: min(980px, 88vw);
+      margin-top: 38px;
+      display: grid;
+      place-items: center;
+    }
+
+    .search-shell {
+      position: relative;
+      z-index: 4;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .search-box {
+      width: 100%;
+      display: flex;
+      align-items: stretch;
+      border-radius: 999px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(26, 17, 38, 0.88), rgba(18, 13, 28, 0.92));
+      border: 1px solid rgba(198, 164, 255, 0.28);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.04),
+        0 0 0 1px rgba(186, 143, 255, 0.05),
+        0 18px 42px rgba(0,0,0,0.34),
+        0 0 34px rgba(176, 120, 255, 0.18);
+      backdrop-filter: blur(10px);
+    }
+
+    .search-box:focus-within {
+      border-color: rgba(224, 203, 255, 0.42);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.05),
+        0 0 0 1px rgba(186, 143, 255, 0.08),
+        0 18px 42px rgba(0,0,0,0.34),
+        0 0 46px rgba(176, 120, 255, 0.26);
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 0;
+      height: 88px;
+      padding: 0 34px;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #f5f1fb;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+    }
+
+    .search-input::placeholder {
+      color: #b9afd0;
+    }
+
+    .search-button {
+      width: 108px;
+      border: none;
+      border-left: 1px solid rgba(255,255,255,0.06);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      color: #f7f1ff;
+      background:
+        radial-gradient(circle at center, rgba(204, 164, 255, 0.28), rgba(132, 77, 227, 0.24));
+      transition: opacity 0.18s ease, background 0.18s ease;
+      box-shadow: inset 1px 0 0 rgba(255,255,255,0.02);
+    }
+
+    .search-button:hover {
+      background:
+        radial-gradient(circle at center, rgba(220, 181, 255, 0.36), rgba(139, 82, 238, 0.30));
+    }
+
+    .search-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.78;
+    }
+
+    .search-button svg {
+      width: 34px;
+      height: 34px;
+    }
+
+    .powered-by {
+      margin-top: 22px;
+      text-align: center;
+      color: #e2d8f0;
+      font-size: 21px;
+      letter-spacing: -0.02em;
+      text-shadow: 0 6px 18px rgba(0,0,0,0.24);
+    }
+
+    .powered-by strong {
+      font-weight: 700;
+      color: #f7f3ff;
+    }
+
+    .results-shell {
+      max-width: var(--content-width);
+      margin: 42px auto 0;
+      display: grid;
+      grid-template-columns: 1.45fr 0.95fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-xl);
+      padding: 28px;
+      box-shadow: var(--shadow), var(--glow);
+      backdrop-filter: blur(16px);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .panel-title-wrap {
+      min-width: 0;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+
+    .panel-subtitle {
+      margin-top: 7px;
+      color: var(--muted-2);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .status-badge {
+      flex-shrink: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border: 1px solid rgba(182, 140, 255, 0.18);
+      background: rgba(120, 78, 216, 0.14);
+      color: #f0e5ff;
+    }
+
+    .status-badge.loading {
+      background: rgba(161, 98, 7, 0.30);
+      color: #fef3c7;
+      border-color: rgba(250, 204, 21, 0.18);
+    }
+
+    .status-badge.success {
+      background: rgba(22, 101, 52, 0.30);
+      color: #dcfce7;
+      border-color: rgba(134, 239, 172, 0.18);
+    }
+
+    .status-badge.error {
+      background: rgba(127, 29, 29, 0.30);
+      color: #fee2e2;
+      border-color: rgba(252, 165, 165, 0.12);
+    }
+
+    .answer-text {
+      color: #ece8f7;
+      line-height: 1.82;
+      font-size: 17px;
+      word-break: break-word;
+    }
+
+    .answer-text p {
+      margin: 0 0 1em;
+    }
+
+    .answer-text p:last-child {
+      margin-bottom: 0;
+    }
+
+    .meta-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .meta-pill,
+    .source-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 15px;
+      border-radius: 999px;
+      font-size: 14px;
+      border: 1px solid transparent;
+    }
+
+    .meta-pill {
+      background:
+        linear-gradient(180deg, var(--pill), var(--pill-2));
+      color: #e6e0f3;
+      border-color: var(--pill-border);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.03),
+        inset 0 -8px 14px rgba(0,0,0,0.20);
+    }
+
+    .meta-pill.high {
+      background: rgba(22, 101, 52, 0.25);
+      color: #dcfce7;
+      border-color: rgba(134, 239, 172, 0.18);
+    }
+
+    .meta-pill.medium {
+      background: rgba(146, 64, 14, 0.28);
+      color: #fef3c7;
+      border-color: rgba(253, 224, 71, 0.12);
+    }
+
+    .meta-pill.low {
+      background: rgba(127, 29, 29, 0.30);
+      color: #fee2e2;
+      border-color: rgba(252, 165, 165, 0.12);
+    }
+
+    .source-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .source-pill {
+      background:
+        linear-gradient(180deg, rgba(39, 28, 62, 0.76), rgba(24, 18, 40, 0.82));
+      color: #e7ddf6;
+      border-color: rgba(205, 179, 255, 0.12);
+      text-decoration: none;
+    }
+
+    .mini-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+    }
+
+    .stat-card {
+      min-height: 96px;
+      background:
+        linear-gradient(180deg, rgba(26, 18, 44, 0.66), rgba(18, 12, 30, 0.76));
+      border: 1px solid rgba(205, 179, 255, 0.12);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.03),
+        inset 0 -10px 16px rgba(0,0,0,0.22);
+    }
+
+    .stat-label {
+      color: var(--muted-2);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 21px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    .footer-note,
+    .sources-note {
+      margin-top: 16px;
+      color: var(--muted-2);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .site-footer {
+      max-width: var(--content-width);
+      margin: 24px auto 0;
+      color: #b9b1c9;
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 0 4px;
+      text-align: center;
+    }
+
+    @media (max-width: 1100px) {
+      body {
+        background-attachment: scroll;
+      }
+
+      .hero {
+        min-height: 860px;
+      }
+
+      .hero-inner {
+        min-height: 860px;
+      }
+
+      .hero-copy {
+        padding-top: 155px;
+      }
+
+      .results-shell {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 780px) {
+      .page {
+        padding: 14px 12px 40px;
+      }
+
+      .hero {
+        min-height: 760px;
+        border-radius: 24px;
+      }
+
+      .hero-inner {
+        min-height: 760px;
+        padding: 20px 18px 32px;
+      }
+
+      .hero-topbar {
+        align-items: flex-start;
+        gap: 14px;
+      }
+
+      .brand-full-wrap {
+        width: min(280px, 56vw);
+      }
+
+      .signin-button {
+        min-height: 42px;
+        padding: 10px 16px;
+        font-size: 15px;
+      }
+
+      .hero-copy {
+        padding-top: 128px;
+      }
+
+      .nexus-title {
+        font-size: clamp(62px, 15vw, 92px);
+      }
+
+      .nexus-subtitle {
+        font-size: 18px;
+      }
+
+      .nexus-description {
+        font-size: 15px;
+        padding: 0 8px;
+      }
+
+      .search-frame {
+        width: 100%;
+        margin-top: 26px;
+      }
+
+      .search-input {
+        height: 72px;
+        font-size: 18px;
+        padding: 0 22px;
+      }
+
+      .search-button {
+        width: 88px;
+      }
+
+      .powered-by {
+        font-size: 16px;
+      }
+
+      .panel {
+        padding: 22px;
+      }
+
+      .panel h2 {
+        font-size: 24px;
+      }
+
+      .mini-stats {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="container">
+      <section class="hero">
+        <div class="hero-inner">
+          <div class="hero-topbar">
+            <a class="brand-lockup" href="#" aria-label="Modman Technologies LLC">
+              <div class="brand-full-wrap">
+                <img src="/modman-technologies-full.png" alt="Modman Technologies LLC logo" />
+              </div>
+            </a>
+
+            <div class="hero-actions">
+              <button class="signin-button" id="signin-button" type="button">Sign In</button>
+            </div>
+          </div>
+
+          <div class="hero-stage">
+            <div class="hero-copy">
+              <h1 class="nexus-title">Nexus</h1>
+              <div class="nexus-subtitle">Trusted AI Intelligence</div>
+              <div class="nexus-description">Multi-model reasoning, verification &amp; synthesis</div>
+
+              <div class="search-frame">
+                <div class="search-shell">
+                  <div class="search-box">
+                    <input
+                      class="search-input"
+                      id="query"
+                      type="text"
+                      placeholder="Ask Nexus anything..."
+                      autocomplete="off"
+                    />
+                    <button class="search-button" id="search-button" type="button" aria-label="Search">
+                      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/>
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div class="powered-by">Powered by <strong>Chiron</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results-shell" id="results-shell">
+        <div class="column">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <h2>Unified Answer</h2>
+                <div class="panel-subtitle">Final response area for the Chiron Nexus broker.</div>
+              </div>
+              <div class="status-badge" id="status-badge">Idle</div>
+            </div>
+
+            <div class="answer-text" id="unified-answer">
+              <p>Search results will appear here.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="column">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <h2>Answer Details</h2>
+                <div class="panel-subtitle">Provider, cache, confidence, access, and timing metadata.</div>
+              </div>
+            </div>
+
+            <div class="meta-grid">
+              <div class="meta-pill" id="pill-confidence">Confidence: --</div>
+              <div class="meta-pill" id="pill-provider">Provider: --</div>
+              <div class="meta-pill" id="pill-cached">Cached: --</div>
+              <div class="meta-pill" id="pill-response-time">Response Time: --</div>
+              <div class="meta-pill" id="pill-cache-type">Cache Type: --</div>
+              <div class="meta-pill" id="pill-access-tier">Access: Public</div>
+            </div>
+
+            <div class="mini-stats">
+              <div class="stat-card">
+                <div class="stat-label">Primary Provider</div>
+                <div class="stat-value" id="stat-primary-provider">--</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Current Access</div>
+                <div class="stat-value" id="stat-access-tier">PUBLIC</div>
+              </div>
+            </div>
+
+            <div class="footer-note" id="details-footer-note">
+              Route mode, caching, access state, and synthesis metadata will render here when backend search is connected.
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title-wrap">
+                <h2>AI Sources</h2>
+                <div class="panel-subtitle">Providers and source references returned by the API.</div>
+              </div>
+            </div>
+
+            <div class="source-list" id="ai-sources"></div>
+            <div class="sources-note" id="sources-note">Source links will appear here once live results are shown.</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="site-footer">
+        Nexus is part of the Chiron AI platform, built by Modman Technologies LLC.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const queryInput = document.getElementById("query");
+    const searchButton = document.getElementById("search-button");
+    const signinButton = document.getElementById("signin-button");
+    const unifiedAnswer = document.getElementById("unified-answer");
+    const statusBadge = document.getElementById("status-badge");
+    const pillConfidence = document.getElementById("pill-confidence");
+    const pillProvider = document.getElementById("pill-provider");
+    const pillCached = document.getElementById("pill-cached");
+    const pillResponseTime = document.getElementById("pill-response-time");
+    const pillCacheType = document.getElementById("pill-cache-type");
+    const pillAccessTier = document.getElementById("pill-access-tier");
+    const statPrimaryProvider = document.getElementById("stat-primary-provider");
+    const statAccessTier = document.getElementById("stat-access-tier");
+    const detailsFooterNote = document.getElementById("details-footer-note");
+    const aiSources = document.getElementById("ai-sources");
+    const sourcesNote = document.getElementById("sources-note");
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function setStatus(state, text) {
+      statusBadge.className = "status-badge";
+      if (state === "loading") statusBadge.classList.add("loading");
+      if (state === "success") statusBadge.classList.add("success");
+      if (state === "error") statusBadge.classList.add("error");
+      statusBadge.textContent = text;
+    }
+
+    function setFallbackAnswer(message) {
+      unifiedAnswer.innerHTML = `<p>${escapeHtml(message)}</p>`;
+    }
+
+    function renderResult(data, elapsedMs) {
+      const answerHtml = String(data?.answer || "No answer returned.")
+        .split(/\n{2,}/)
+        .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+        .join("");
+
+      unifiedAnswer.innerHTML = answerHtml;
+
+      pillConfidence.className = "meta-pill";
+      if (data?.confidence === "high") pillConfidence.classList.add("high");
+      if (data?.confidence === "medium") pillConfidence.classList.add("medium");
+      if (data?.confidence === "low") pillConfidence.classList.add("low");
+      pillConfidence.textContent = `Confidence: ${data?.confidence || "--"}`;
+
+      pillProvider.textContent = `Provider: ${data?.provider || "--"}`;
+      pillCached.textContent = `Cached: ${data?.cached === true ? "Yes" : data?.cached === false ? "No" : "--"}`;
+      pillResponseTime.textContent = `Response Time: ${elapsedMs} ms`;
+      pillCacheType.textContent = `Cache Type: ${data?.cache_type || "--"}`;
+      pillAccessTier.textContent = `Access: ${String(data?.access_tier || "public").replace(/^./, c => c.toUpperCase())}`;
+
+      statPrimaryProvider.textContent = data?.provider || "--";
+      statAccessTier.textContent = String(data?.access_tier || "public").toUpperCase();
+
+      const routeMode = data?.route_mode || "--";
+      const queryType = data?.query_type || "--";
+      const difficulty = data?.query_difficulty || "--";
+      detailsFooterNote.textContent = `Route: ${routeMode} • Query Type: ${queryType} • Difficulty: ${difficulty}`;
+
+      const sourceLinks = Array.isArray(data?.source_links) ? data.source_links : [];
+      const sourceNames = Array.isArray(data?.sources) ? data.sources : [];
+
+      if (sourceLinks.length > 0) {
+        aiSources.innerHTML = sourceLinks.map((item) => {
+          const href = escapeHtml(item?.url || "#");
+          const title = escapeHtml(item?.title || item?.provider || "Source");
+          return `<a class="source-pill" href="${href}" target="_blank" rel="noopener noreferrer">${title}</a>`;
+        }).join("");
+        sourcesNote.textContent = "Live sources returned by the query.";
+      } else if (sourceNames.length > 0) {
+        aiSources.innerHTML = sourceNames
+          .map((item) => `<div class="source-pill">${escapeHtml(item)}</div>`)
+          .join("");
+        sourcesNote.textContent = "Provider references returned by the query.";
+      } else {
+        aiSources.innerHTML = "";
+        sourcesNote.textContent = "No source links were returned for this result.";
+      }
+    }
+
+    async function goSearch() {
+      const q = queryInput.value.trim();
+      if (!q) return;
+
+      searchButton.disabled = true;
+      setStatus("loading", "Searching");
+      setFallbackAnswer("Thinking...");
+
+      try {
+        const startedAt = performance.now();
+
+        const response = await fetch("/api/search", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ query: q })
+        });
+
+        const elapsedMs = Math.round(performance.now() - startedAt);
+        const data = await response.json();
+
+        if (!response.ok) {
+          setStatus("error", "Error");
+          setFallbackAnswer(data?.answer || "Search failed.");
+          return;
+        }
+
+        renderResult(data, elapsedMs);
+        setStatus("success", data?.cached ? "Cached" : "Live");
+      } catch (error) {
+        console.error(error);
+        setStatus("error", "Error");
+        setFallbackAnswer("Search failed.");
+      } finally {
+        searchButton.disabled = false;
+      }
+    }
+
+    queryInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        goSearch();
+      }
+    });
+
+    searchButton.addEventListener("click", goSearch);
+
+    signinButton.addEventListener("click", () => {
+      window.location.href = "/sign-in";
+    });
+  </script>
+</body>
+</html>ံုး to try replace it
