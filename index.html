@@ -1,1142 +1,573 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chiron Nexus</title>
-
-  <style>
-    :root {
-      --bg-1: #090510;
-      --bg-2: #130b1f;
-      --bg-3: #1a1030;
-      --purple: #b489ff;
-      --purple-soft: rgba(180, 137, 255, 0.32);
-      --purple-mid: rgba(180, 137, 255, 0.18);
-      --purple-faint: rgba(180, 137, 255, 0.08);
-      --bar-bg: rgba(17, 10, 30, 0.88);
-      --bar-inner: rgba(38, 24, 64, 0.55);
-      --bar-border: rgba(190, 150, 255, 0.72);
-      --text-emboss: rgba(190, 165, 235, 0.14);
-      --text-emboss-hi: rgba(255, 255, 255, 0.055);
-      --shadow-dark: rgba(0, 0, 0, 0.62);
-
-      --panel-bg: rgba(15, 10, 26, 0.74);
-      --panel-bg-2: rgba(24, 16, 40, 0.60);
-      --panel-border: rgba(198, 166, 255, 0.14);
-      --panel-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
-
-      --pill-bg: rgba(30, 21, 50, 0.74);
-      --pill-border: rgba(205, 179, 255, 0.14);
-      --pill-text: rgba(236, 230, 247, 0.92);
-
-      --stat-bg: rgba(18, 12, 31, 0.72);
-      --stat-border: rgba(205, 179, 255, 0.12);
-
-      --text-main: rgba(247, 244, 252, 0.96);
-      --text-soft: rgba(224, 215, 239, 0.82);
-      --text-muted: rgba(187, 178, 205, 0.74);
-
-      --success-bg: rgba(23, 88, 53, 0.32);
-      --success-border: rgba(114, 226, 160, 0.18);
-      --success-text: rgba(220, 252, 231, 0.96);
-
-      --warn-bg: rgba(135, 78, 18, 0.34);
-      --warn-border: rgba(251, 191, 36, 0.18);
-      --warn-text: rgba(254, 243, 199, 0.96);
-
-      --danger-bg: rgba(120, 33, 33, 0.34);
-      --danger-border: rgba(252, 165, 165, 0.18);
-      --danger-text: rgba(254, 226, 226, 0.96);
-
-      --radius-xl: 28px;
-      --radius-lg: 20px;
-      --radius-pill: 999px;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html,
-    body {
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      background: #07040d;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    body {
-      position: relative;
-      color: white;
-      overflow-x: hidden;
-      overflow-y: auto;
-      background:
-        radial-gradient(circle at 50% 14%, rgba(173, 120, 255, 0.18), transparent 22%),
-        radial-gradient(circle at 50% 40%, rgba(138, 88, 219, 0.10), transparent 42%),
-        radial-gradient(circle at 50% 65%, rgba(140, 90, 220, 0.10), transparent 48%),
-        linear-gradient(180deg, #0a0612 0%, #12091c 32%, #13091d 58%, #09050f 100%);
-    }
-
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      opacity: 0.34;
-      mix-blend-mode: screen;
-      background-image:
-        url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'>\
-<filter id='n'>\
-<feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/>\
-<saturate values='0'/>\
-</filter>\
-<rect width='100%' height='100%' filter='url(%23n)' opacity='1'/>\
-</svg>");
-      background-size: 420px 420px;
-      z-index: 0;
-    }
-
-    body::after {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      opacity: 0.16;
-      background:
-        repeating-linear-gradient(
-          90deg,
-          rgba(255,255,255,0.02) 0px,
-          rgba(255,255,255,0.02) 2px,
-          rgba(0,0,0,0.03) 6px,
-          rgba(0,0,0,0.03) 18px
-        );
-      mix-blend-mode: soft-light;
-      z-index: 0;
-    }
-
-    .scene {
-      position: relative;
-      width: 100%;
-      min-height: 100vh;
-      isolation: isolate;
-      overflow: hidden;
-      z-index: 1;
-    }
-
-    /* Wallpaper arcs preserved */
-    .arc-left,
-    .arc-right,
-    .arc-bottom {
-      position: absolute;
-      border-radius: 50%;
-      pointer-events: none;
-      filter: blur(0.2px);
-    }
-
-    .arc-left {
-      width: 1320px;
-      height: 660px;
-      left: -140px;
-      bottom: 130px;
-      border: 2px solid rgba(150, 110, 245, 0.16);
-      border-top-color: transparent;
-      border-right-color: transparent;
-      transform: rotate(-9deg);
-      box-shadow:
-        0 0 30px rgba(173, 120, 255, 0.10),
-        0 0 80px rgba(173, 120, 255, 0.07),
-        inset 0 0 26px rgba(173, 120, 255, 0.05);
-    }
-
-    .arc-left::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      border: 3px solid transparent;
-      border-left-color: rgba(210, 180, 255, 0.68);
-      border-bottom-color: rgba(210, 180, 255, 0.62);
-      filter: blur(2px);
-      box-shadow:
-        0 0 18px rgba(215, 183, 255, 0.65),
-        0 0 50px rgba(168, 115, 255, 0.30),
-        0 0 110px rgba(168, 115, 255, 0.16);
-    }
-
-    .arc-right {
-      width: 1450px;
-      height: 640px;
-      right: -330px;
-      bottom: 160px;
-      border: 2px solid rgba(145, 103, 235, 0.10);
-      border-left-color: transparent;
-      border-top-color: transparent;
-      transform: rotate(8deg);
-      box-shadow:
-        0 0 30px rgba(160, 116, 250, 0.08),
-        0 0 70px rgba(160, 116, 250, 0.06);
-    }
-
-    .arc-bottom {
-      width: 1220px;
-      height: 260px;
-      left: 50%;
-      bottom: 95px;
-      transform: translateX(-50%);
-      border: 1px solid rgba(200, 166, 255, 0.08);
-      border-top-color: transparent;
-      box-shadow:
-        0 0 30px rgba(170, 120, 255, 0.05),
-        0 0 60px rgba(170, 120, 255, 0.04);
-    }
-
-    .spark {
-      position: absolute;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: rgba(223, 205, 255, 0.95);
-      box-shadow:
-        0 0 8px rgba(223, 205, 255, 0.95),
-        0 0 18px rgba(188, 145, 255, 0.62),
-        0 0 36px rgba(188, 145, 255, 0.30);
-      top: 18%;
-      left: 66%;
-    }
-
-    /* Top branding */
-    .modman-branding {
-      position: absolute;
-      top: 40px;
-      left: 40px;
-      z-index: 10;
-    }
-
-    .modman-branding img {
-      width: min(420px, 30vw);
-      height: auto;
-      display: block;
-      filter:
-        drop-shadow(0 10px 24px rgba(0,0,0,0.35))
-        drop-shadow(0 0 12px rgba(180,137,255,0.15));
-    }
-
-    .top-actions {
-      position: absolute;
-      top: 40px;
-      right: 40px;
-      z-index: 10;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .signin-button {
-      appearance: none;
-      min-height: 48px;
-      padding: 10px 22px;
-      border-radius: 999px;
-      border: 1px solid rgba(196, 162, 255, 0.18);
-      background:
-        linear-gradient(180deg, rgba(33, 22, 57, 0.74), rgba(16, 10, 29, 0.82));
-      color: rgba(248, 244, 255, 0.96);
-      font-size: 16px;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.04),
-        inset 0 -8px 16px rgba(0,0,0,0.30),
-        0 8px 22px rgba(0,0,0,0.22);
-      cursor: pointer;
-      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
-    }
-
-    .signin-button:hover {
-      transform: translateY(-1px);
-      border-color: rgba(212, 184, 255, 0.28);
-      background:
-        linear-gradient(180deg, rgba(40, 26, 67, 0.78), rgba(19, 12, 34, 0.86));
-    }
-
-    /* Emboss preserved */
-    .hero-emboss {
-      position: absolute;
-      top: 12%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(760px, 80vw);
-      display: grid;
-      place-items: center;
-      gap: 12px;
-      pointer-events: none;
-      z-index: 2;
-    }
-
-    .centaur-wrap {
-      position: relative;
-      width: min(440px, 46vw);
-      height: 150px;
-      opacity: 0.5;
-      filter: drop-shadow(0 1px 0 rgba(255,255,255,0.05))
-              drop-shadow(0 8px 16px rgba(0,0,0,0.35));
-    }
-
-    .centaur {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    .chiron-word {
-      font-size: clamp(3.8rem, 8vw, 7rem);
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      font-weight: 600;
-      line-height: 1;
-      color: var(--text-emboss);
-      text-shadow:
-        0 1px 0 var(--text-emboss-hi),
-        0 -1px 0 rgba(0,0,0,0.42),
-        0 8px 18px rgba(0,0,0,0.32);
-      opacity: 0.88;
-      user-select: none;
-    }
-
-    /* Nexus title block */
-    .nexus-copy {
-      position: absolute;
-      top: 36%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(980px, 86vw);
-      z-index: 6;
-      text-align: center;
-      pointer-events: none;
-    }
-
-    .nexus-title {
-      margin: 0;
-      font-size: clamp(5.5rem, 10vw, 8.5rem);
-      line-height: 0.94;
-      letter-spacing: -0.06em;
-      font-weight: 700;
-      color: var(--text-main);
-      text-shadow:
-        0 12px 30px rgba(0,0,0,0.32);
-    }
-
-    .nexus-subtitle {
-      margin-top: 14px;
-      font-size: clamp(1.35rem, 2vw, 2rem);
-      font-weight: 400;
-      line-height: 1.2;
-      letter-spacing: -0.02em;
-      color: rgba(245, 240, 252, 0.92);
-      text-shadow: 0 6px 16px rgba(0,0,0,0.22);
-    }
-
-    .nexus-description {
-      margin-top: 20px;
-      font-size: clamp(1rem, 1.25vw, 1.32rem);
-      line-height: 1.55;
-      color: var(--text-soft);
-      letter-spacing: -0.01em;
-      text-shadow: 0 4px 12px rgba(0,0,0,0.18);
-    }
-
-    /* Search zone preserved, now functional */
-    .search-wrap {
-      position: absolute;
-      left: 50%;
-      bottom: 15.5%;
-      transform: translateX(-50%);
-      width: min(840px, 67vw);
-      z-index: 7;
-    }
-
-    .search-glow {
-      position: absolute;
-      inset: -10px -16px -10px -16px;
-      border-radius: 999px;
-      background:
-        radial-gradient(circle at 50% 50%, rgba(194, 153, 255, 0.16), transparent 62%);
-      filter: blur(16px);
-      pointer-events: none;
-    }
-
-    .search-bar {
-      position: relative;
-      height: 94px;
-      border-radius: 999px;
-      background:
-        linear-gradient(180deg, rgba(31, 20, 54, 0.76), rgba(14, 9, 26, 0.94)),
-        rgba(16, 10, 28, 0.94);
-      border: 2px solid rgba(170, 130, 245, 0.44);
-      box-shadow:
-        inset 0 2px 2px rgba(255,255,255,0.03),
-        inset 0 -8px 18px rgba(0,0,0,0.48),
-        inset 0 0 24px rgba(140, 95, 220, 0.10),
-        0 0 0 2px rgba(255,255,255,0.03),
-        0 0 18px rgba(179, 134, 255, 0.45),
-        0 0 38px rgba(179, 134, 255, 0.20),
-        0 16px 28px rgba(0,0,0,0.40);
-      overflow: hidden;
-    }
-
-    .search-bar::before {
-      content: "";
-      position: absolute;
-      inset: 8px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.05);
-      box-shadow:
-        inset 0 8px 20px rgba(255,255,255,0.02),
-        inset 0 -8px 20px rgba(0,0,0,0.34);
-      pointer-events: none;
-    }
-
-    .search-bar::after {
-      content: "";
-      position: absolute;
-      right: 12px;
-      top: 10px;
-      bottom: 10px;
-      width: 92px;
-      border-radius: 999px;
-      background:
-        linear-gradient(180deg, rgba(34, 21, 58, 0.76), rgba(16, 10, 28, 0.86));
-      box-shadow:
-        inset 0 1px 1px rgba(255,255,255,0.03),
-        inset 0 -8px 12px rgba(0,0,0,0.32);
-    }
-
-    .search-inner-glow {
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      pointer-events: none;
-      box-shadow:
-        inset 0 0 0 1px rgba(215, 188, 255, 0.12),
-        inset 0 0 25px rgba(170, 125, 255, 0.08);
-    }
-
-    .search-edge-glow {
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      pointer-events: none;
-      box-shadow:
-        0 0 16px rgba(203, 170, 255, 0.58),
-        0 0 46px rgba(183, 137, 255, 0.26),
-        0 0 90px rgba(173, 120, 255, 0.12);
-    }
-
-    .search-input {
-      position: absolute;
-      left: 30px;
-      right: 112px;
-      top: 0;
-      bottom: 0;
-      z-index: 2;
-      border: none;
-      outline: none;
-      background: transparent;
-      color: rgba(245, 241, 251, 0.96);
-      font-size: 1.28rem;
-      letter-spacing: -0.01em;
-    }
-
-    .search-input::placeholder {
-      color: rgba(184, 172, 206, 0.88);
-    }
-
-    .search-submit {
-      position: absolute;
-      right: 18px;
-      top: 50%;
-      transform: translateY(-50%);
-      z-index: 3;
-      width: 62px;
-      height: 62px;
-      border: none;
-      border-radius: 999px;
-      background: transparent;
-      color: rgba(239,225,255,0.95);
-      cursor: pointer;
-      display: grid;
-      place-items: center;
-    }
-
-    .search-submit svg {
-      width: 58px;
-      height: 58px;
-      display: block;
-      filter:
-        drop-shadow(0 0 7px rgba(223, 197, 255, 0.58))
-        drop-shadow(0 0 14px rgba(183, 137, 255, 0.32));
-    }
-
-    .under-haze {
-      position: absolute;
-      left: 50%;
-      bottom: 10%;
-      transform: translateX(-50%);
-      width: min(900px, 76vw);
-      height: 150px;
-      border-radius: 50%;
-      background:
-        radial-gradient(circle at center, rgba(182, 140, 255, 0.18), transparent 68%);
-      filter: blur(36px);
-      pointer-events: none;
-    }
-
-    /* Result / tool area */
-    .results-panel-wrap {
-      position: relative;
-      z-index: 8;
-      width: min(1120px, 90vw);
-      margin: calc(100vh - 80px) auto 110px;
-      display: none;
-    }
-
-    .results-panel-wrap.visible {
-      display: block;
-    }
-
-    .results-grid {
-      display: grid;
-      grid-template-columns: 1.38fr 0.92fr;
-      gap: 22px;
-      align-items: start;
-    }
-
-    .panel {
-      background:
-        linear-gradient(180deg, var(--panel-bg), var(--panel-bg-2));
-      border: 1px solid var(--panel-border);
-      border-radius: var(--radius-xl);
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.03),
-        inset 0 -10px 18px rgba(0,0,0,0.24),
-        var(--panel-shadow);
-      backdrop-filter: blur(12px);
-      overflow: hidden;
-    }
-
-    .panel-inner {
-      padding: 24px 24px 22px;
-    }
-
-    .panel-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 14px;
-      margin-bottom: 18px;
-    }
-
-    .panel-title-wrap h2 {
-      margin: 0;
-      font-size: 1.75rem;
-      line-height: 1.06;
-      letter-spacing: -0.03em;
-      color: var(--text-main);
-    }
-
-    .panel-subtitle {
-      margin-top: 8px;
-      color: var(--text-muted);
-      font-size: 0.92rem;
-      line-height: 1.5;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 42px;
-      padding: 9px 14px;
-      border-radius: 999px;
-      font-size: 0.76rem;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: rgba(244, 237, 255, 0.96);
-      background: rgba(72, 45, 122, 0.32);
-      border: 1px solid rgba(191, 161, 255, 0.18);
-      white-space: nowrap;
-    }
-
-    .status-badge.loading {
-      background: var(--warn-bg);
-      border-color: var(--warn-border);
-      color: var(--warn-text);
-    }
-
-    .status-badge.success {
-      background: var(--success-bg);
-      border-color: var(--success-border);
-      color: var(--success-text);
-    }
-
-    .status-badge.error {
-      background: var(--danger-bg);
-      border-color: var(--danger-border);
-      color: var(--danger-text);
-    }
-
-    .answer-text {
-      color: rgba(235, 231, 244, 0.96);
-      line-height: 1.78;
-      font-size: 1.02rem;
-      letter-spacing: -0.01em;
-    }
-
-    .answer-text p {
-      margin: 0 0 1em;
-    }
-
-    .answer-text p:last-child {
-      margin-bottom: 0;
-    }
-
-    /* MUST-HAVE TOOL STRUCTURE */
-    .meta-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .meta-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 44px;
-      padding: 10px 16px;
-      border-radius: var(--radius-pill);
-      font-size: 0.92rem;
-      color: var(--pill-text);
-      background:
-        linear-gradient(180deg, rgba(44, 30, 72, 0.76), rgba(25, 17, 43, 0.82));
-      border: 1px solid var(--pill-border);
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.03),
-        inset 0 -8px 14px rgba(0,0,0,0.20);
-      white-space: nowrap;
-    }
-
-    .meta-pill.high {
-      background: var(--success-bg);
-      border-color: var(--success-border);
-      color: var(--success-text);
-    }
-
-    .meta-pill.medium {
-      background: var(--warn-bg);
-      border-color: var(--warn-border);
-      color: var(--warn-text);
-    }
-
-    .meta-pill.low {
-      background: var(--danger-bg);
-      border-color: var(--danger-border);
-      color: var(--danger-text);
-    }
-
-    .mini-stats {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-top: 20px;
-    }
-
-    .stat-card {
-      min-height: 96px;
-      padding: 18px 18px 20px;
-      border-radius: var(--radius-lg);
-      background:
-        linear-gradient(180deg, rgba(28, 18, 46, 0.70), rgba(18, 12, 30, 0.78));
-      border: 1px solid var(--stat-border);
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.03),
-        inset 0 -10px 16px rgba(0,0,0,0.22);
-    }
-
-    .stat-label {
-      color: var(--text-muted);
-      font-size: 0.82rem;
-      margin-bottom: 10px;
-    }
-
-    .stat-value {
-      color: var(--text-main);
-      font-size: 1.28rem;
-      font-weight: 700;
-      line-height: 1.18;
-      letter-spacing: -0.02em;
-      word-break: break-word;
-    }
-
-    .source-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .source-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 42px;
-      padding: 10px 14px;
-      border-radius: var(--radius-pill);
-      font-size: 0.9rem;
-      color: rgba(223, 236, 255, 0.95);
-      background:
-        linear-gradient(180deg, rgba(34, 24, 56, 0.80), rgba(18, 14, 33, 0.82));
-      border: 1px solid rgba(151, 190, 255, 0.12);
-      text-decoration: none;
-      box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.03),
-        inset 0 -8px 12px rgba(0,0,0,0.18);
-    }
-
-    .footer-note,
-    .sources-note {
-      margin-top: 16px;
-      color: var(--text-muted);
-      font-size: 0.85rem;
-      line-height: 1.55;
-    }
-
-    .nexus-footer {
-      position: fixed;
-      bottom: 20px;
-      left: 0;
-      width: 100%;
-      text-align: center;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      font-size: 14px;
-      color: rgba(210, 210, 220, 0.8);
-      letter-spacing: 0.2px;
-      z-index: 5;
-      text-shadow:
-        0 1px 0 rgba(255,255,255,0.05),
-        0 -1px 0 rgba(0,0,0,0.6);
-    }
-
-    @media (max-width: 1100px) {
-      .results-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .modman-branding img {
-        width: min(340px, 38vw);
-      }
-
-      .nexus-copy {
-        top: 38%;
-      }
-    }
-
-    @media (max-width: 900px) {
-      .search-wrap {
-        width: min(92vw, 840px);
-        bottom: 17%;
-      }
-
-      .search-bar {
-        height: 78px;
-      }
-
-      .search-bar::after {
-        width: 78px;
-        right: 10px;
-      }
-
-      .search-submit {
-        width: 52px;
-        height: 52px;
-        right: 16px;
-      }
-
-      .search-submit svg {
-        width: 48px;
-        height: 48px;
-      }
-
-      .search-input {
-        right: 92px;
-        font-size: 1.08rem;
-      }
-
-      .hero-emboss {
-        top: 13%;
-      }
-
-      .centaur-wrap {
-        height: 118px;
-      }
-
-      .nexus-copy {
-        top: 39%;
-        width: 92vw;
-      }
-
-      .nexus-title {
-        font-size: clamp(4.2rem, 12vw, 6.4rem);
-      }
-
-      .nexus-subtitle {
-        font-size: clamp(1.1rem, 3vw, 1.55rem);
-      }
-
-      .nexus-description {
-        font-size: 0.98rem;
-        margin-top: 16px;
-      }
-
-      .top-actions {
-        top: 26px;
-        right: 22px;
-      }
-
-      .modman-branding {
-        top: 26px;
-        left: 22px;
-      }
-
-      .signin-button {
-        min-height: 42px;
-        padding: 9px 16px;
-        font-size: 14px;
-      }
-
-      .results-panel-wrap {
-        width: min(94vw, 1120px);
-        margin: calc(100vh - 40px) auto 110px;
-      }
-    }
-
-    @media (max-width: 640px) {
-      .modman-branding img {
-        width: min(240px, 54vw);
-      }
-
-      .nexus-copy {
-        top: 41%;
-      }
-
-      .panel-inner {
-        padding: 20px 18px 18px;
-      }
-
-      .panel-title-wrap h2 {
-        font-size: 1.4rem;
-      }
-
-      .mini-stats {
-        grid-template-columns: 1fr;
-      }
-
-      .meta-grid,
-      .source-list {
-        gap: 10px;
-      }
-
-      .meta-pill,
-      .source-pill {
-        font-size: 0.84rem;
-      }
-
-      .nexus-footer {
-        font-size: 12px;
-        padding: 0 18px;
-      }
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Chiron Nexus</title>
+
+<style>
+:root{
+  --bg-top:#1f1230;
+  --bg-mid:#12091c;
+  --bg-bottom:#07040d;
+
+  --text-main:rgba(248,245,252,0.96);
+  --text-soft:rgba(229,220,241,0.86);
+  --text-muted:rgba(186,178,205,0.74);
+
+  --panel-bg:rgba(14,10,24,0.82);
+  --panel-bg-2:rgba(20,14,33,0.76);
+  --panel-border:rgba(255,255,255,0.08);
+
+  --tool-bg:rgba(27,19,42,0.88);
+  --tool-border:rgba(255,255,255,0.08);
+
+  --accent:#8f63df;
+  --accent-soft:rgba(143,99,223,0.24);
+  --accent-glow:rgba(170,120,255,0.22);
+}
+
+*{
+  box-sizing:border-box;
+}
+
+html{
+  scroll-behavior:smooth;
+}
+
+body{
+  margin:0;
+  min-height:100vh;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  color:white;
+  overflow-x:hidden;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(172,123,255,0.10), transparent 22%),
+    radial-gradient(circle at 50% 46%, rgba(118,73,196,0.08), transparent 34%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 42%, var(--bg-bottom) 100%);
+}
+
+/* softer leather texture instead of static */
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.08;
+  background:
+    radial-gradient(circle at 18% 30%, rgba(255,255,255,0.028) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 66% 24%, rgba(255,255,255,0.020) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 58% 68%, rgba(255,255,255,0.018) 0 1px, transparent 1.8px);
+  background-size:26px 26px, 34px 34px, 40px 40px;
+  mix-blend-mode:soft-light;
+}
+
+body::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.10;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,0.010) 0px,
+      rgba(255,255,255,0.010) 1px,
+      rgba(0,0,0,0.016) 6px,
+      rgba(0,0,0,0.016) 16px
+    );
+  mix-blend-mode:soft-light;
+}
+
+/* branding */
+.modman-branding{
+  position:absolute;
+  top:40px;
+  left:40px;
+  z-index:10;
+}
+
+.modman-branding img{
+  width:min(420px,30vw);
+  height:auto;
+  display:block;
+  filter:
+    drop-shadow(0 10px 24px rgba(0,0,0,0.32))
+    drop-shadow(0 0 12px rgba(180,137,255,0.10));
+}
+
+/* sign in */
+.signin{
+  position:absolute;
+  top:40px;
+  right:40px;
+  z-index:10;
+  appearance:none;
+  background:
+    linear-gradient(180deg, rgba(38,25,63,0.78), rgba(20,13,33,0.86));
+  border:1px solid rgba(255,255,255,.10);
+  padding:11px 18px;
+  border-radius:999px;
+  color:white;
+  cursor:pointer;
+  font-size:15px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    0 8px 20px rgba(0,0,0,0.20);
+  transition:transform .18s ease,border-color .18s ease,background .18s ease;
+}
+
+.signin:hover{
+  transform:translateY(-1px);
+  border-color:rgba(215,190,255,0.18);
+  background:
+    linear-gradient(180deg, rgba(44,29,73,0.82), rgba(23,15,38,0.90));
+}
+
+/* hero */
+.hero{
+  text-align:center;
+  padding-top:170px;
+  padding-bottom:40px;
+}
+
+.hero h1{
+  font-size:clamp(72px,9vw,112px);
+  line-height:.95;
+  margin:0;
+  letter-spacing:-0.06em;
+  color:var(--text-main);
+  text-shadow:0 12px 28px rgba(0,0,0,0.28);
+}
+
+.hero h2{
+  margin-top:12px;
+  margin-bottom:0;
+  font-size:clamp(24px,2.2vw,34px);
+  line-height:1.2;
+  font-weight:400;
+  color:var(--text-soft);
+  letter-spacing:-0.02em;
+}
+
+.hero p{
+  margin-top:18px;
+  margin-bottom:0;
+  font-size:clamp(16px,1.25vw,20px);
+  line-height:1.55;
+  color:var(--text-muted);
+  letter-spacing:-0.01em;
+}
+
+/* search */
+.search-box{
+  position:relative;
+  margin:54px auto 0;
+  width:min(760px,90%);
+  display:flex;
+  align-items:center;
+  border-radius:999px;
+  background:
+    linear-gradient(180deg, rgba(27,18,43,0.90), rgba(15,10,25,0.94));
+  border:2px solid rgba(143,99,223,0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset 0 -10px 18px rgba(0,0,0,0.30),
+    0 0 18px rgba(150,100,255,.18),
+    0 0 42px rgba(150,100,255,.08);
+  overflow:hidden;
+}
+
+.search-box::before{
+  content:"";
+  position:absolute;
+  inset:8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.04);
+  pointer-events:none;
+}
+
+.search-box input{
+  flex:1;
+  min-width:0;
+  height:86px;
+  padding:0 28px;
+  border:none;
+  background:transparent;
+  color:var(--text-main);
+  font-size:20px;
+  outline:none;
+  letter-spacing:-0.01em;
+}
+
+.search-box input::placeholder{
+  color:rgba(185,174,208,0.88);
+}
+
+.search-box button{
+  width:96px;
+  height:86px;
+  border:none;
+  background:
+    radial-gradient(circle at center, rgba(183,137,255,0.18), rgba(183,137,255,0.06));
+  color:white;
+  cursor:pointer;
+  font-size:24px;
+  transition:background .18s ease, opacity .18s ease;
+}
+
+.search-box button:hover{
+  background:
+    radial-gradient(circle at center, rgba(203,163,255,0.24), rgba(183,137,255,0.08));
+}
+
+/* results */
+.results{
+  max-width:1180px;
+  margin:42px auto 110px;
+  display:grid;
+  grid-template-columns:1.45fr .95fr;
+  gap:24px;
+  padding:0 20px;
+}
+
+/* answer panel */
+.panel{
+  background:
+    linear-gradient(180deg, var(--panel-bg), var(--panel-bg-2));
+  border-radius:24px;
+  padding:26px;
+  border:1px solid var(--panel-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset 0 -10px 16px rgba(0,0,0,0.18),
+    0 18px 36px rgba(0,0,0,0.26);
+  backdrop-filter:blur(10px);
+}
+
+.panel h2{
+  margin:0;
+  font-size:30px;
+  line-height:1.08;
+  letter-spacing:-0.03em;
+  color:var(--text-main);
+}
+
+.panel-copy{
+  margin-top:10px;
+  color:var(--text-muted);
+  line-height:1.55;
+  font-size:14px;
+}
+
+#answer{
+  margin-top:18px;
+  color:rgba(235,231,244,0.96);
+  line-height:1.78;
+  font-size:16px;
+}
+
+/* answer details */
+.tools{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin-top:14px;
+}
+
+.tool{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:44px;
+  padding:10px 16px;
+  background:
+    linear-gradient(180deg, rgba(44,30,72,0.76), rgba(25,17,43,0.82));
+  border:1px solid rgba(205,179,255,0.12);
+  border-radius:999px;
+  font-size:14px;
+  color:rgba(236,230,247,0.92);
+  white-space:nowrap;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset 0 -8px 14px rgba(0,0,0,0.18);
+}
+
+.stat-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  margin-top:22px;
+}
+
+.stat{
+  min-height:96px;
+  background:
+    linear-gradient(180deg, rgba(28,18,46,0.70), rgba(18,12,30,0.78));
+  padding:18px 18px 20px;
+  border-radius:20px;
+  border:1px solid rgba(205,179,255,0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset 0 -10px 16px rgba(0,0,0,0.18);
+}
+
+.stat h4{
+  margin:0 0 10px;
+  color:var(--text-muted);
+  font-size:13px;
+  font-weight:400;
+}
+
+.stat strong{
+  font-size:22px;
+  line-height:1.18;
+  color:var(--text-main);
+}
+
+.details-note{
+  margin-top:20px;
+  color:var(--text-muted);
+  line-height:1.6;
+  font-size:13px;
+}
+
+/* footer */
+.nexus-footer{
+  position:fixed;
+  bottom:20px;
+  left:0;
+  width:100%;
+  text-align:center;
+  font-size:14px;
+  color:rgba(210,210,220,.8);
+  letter-spacing:.2px;
+  z-index:5;
+  text-shadow:
+    0 1px 0 rgba(255,255,255,0.05),
+    0 -1px 0 rgba(0,0,0,0.6);
+}
+
+/* responsive */
+@media (max-width: 980px){
+  .modman-branding{
+    top:28px;
+    left:22px;
+  }
+
+  .modman-branding img{
+    width:min(320px,44vw);
+  }
+
+  .signin{
+    top:28px;
+    right:22px;
+  }
+
+  .hero{
+    padding-top:150px;
+  }
+
+  .results{
+    grid-template-columns:1fr;
+    margin:36px auto 110px;
+  }
+}
+
+@media (max-width: 640px){
+  .modman-branding img{
+    width:min(230px,54vw);
+  }
+
+  .signin{
+    padding:9px 14px;
+    font-size:14px;
+  }
+
+  .hero{
+    padding-top:130px;
+  }
+
+  .hero h1{
+    font-size:clamp(58px,16vw,84px);
+  }
+
+  .hero h2{
+    font-size:clamp(18px,5vw,24px);
+  }
+
+  .hero p{
+    font-size:14px;
+    padding:0 18px;
+  }
+
+  .search-box{
+    width:min(94%,760px);
+    margin-top:38px;
+  }
+
+  .search-box input{
+    height:74px;
+    font-size:17px;
+    padding:0 20px;
+  }
+
+  .search-box button{
+    width:78px;
+    height:74px;
+    font-size:20px;
+  }
+
+  .panel{
+    padding:22px;
+  }
+
+  .panel h2{
+    font-size:24px;
+  }
+
+  .tool{
+    font-size:13px;
+  }
+
+  .stat-grid{
+    grid-template-columns:1fr;
+  }
+
+  .nexus-footer{
+    font-size:12px;
+    padding:0 18px;
+  }
+}
+</style>
 </head>
+
 <body>
-  <div class="scene">
-    <div class="arc-left"></div>
-    <div class="arc-right"></div>
-    <div class="arc-bottom"></div>
-    <div class="spark"></div>
 
-    <div class="modman-branding">
-      <img src="/modman-logo.png" alt="Modman Technologies LLC" />
+<div class="modman-branding">
+  <img src="/modman-technologies-full.png" alt="Modman Technologies LLC">
+</div>
+
+<button class="signin">Sign In</button>
+
+<div class="hero">
+  <h1>Nexus</h1>
+  <h2>Trusted AI Intelligence</h2>
+  <p>Multi-model reasoning, verification &amp; synthesis</p>
+
+  <div class="search-box">
+    <input
+      id="query"
+      placeholder="Ask Nexus anything..."
+      autocomplete="off"
+    >
+    <button id="search-button" type="button" aria-label="Search">🔍</button>
+  </div>
+</div>
+
+<div class="results">
+
+  <div class="panel">
+    <h2>Unified Answer</h2>
+
+    <div id="answer">
+      Search results will appear here.
     </div>
-
-    <div class="top-actions">
-      <button class="signin-button" type="button">Sign In</button>
-    </div>
-
-    <div class="hero-emboss">
-      <div class="centaur-wrap" aria-hidden="true">
-        <svg class="centaur" viewBox="0 0 600 220" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="embossStroke" x1="0" y1="0" x2="600" y2="220" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="rgba(255,255,255,0.10)" />
-              <stop offset="45%" stop-color="rgba(195,165,235,0.22)" />
-              <stop offset="100%" stop-color="rgba(70,45,110,0.42)" />
-            </linearGradient>
-            <linearGradient id="embossFill" x1="0" y1="0" x2="600" y2="220" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#8f74b8" stop-opacity="0.18" />
-              <stop offset="100%" stop-color="#2b173d" stop-opacity="0.06" />
-            </linearGradient>
-            <filter id="softEmboss" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="blur"/>
-              <feOffset dx="0" dy="1" result="offset1"/>
-              <feFlood flood-color="rgba(255,255,255,0.10)" result="light"/>
-              <feComposite in="light" in2="offset1" operator="in" result="lighted"/>
-              <feOffset dx="0" dy="-1" result="offset2"/>
-              <feFlood flood-color="rgba(0,0,0,0.34)" result="dark"/>
-              <feComposite in="dark" in2="offset2" operator="in" result="shadowed"/>
-              <feMerge>
-                <feMergeNode in="shadowed"/>
-                <feMergeNode in="lighted"/>
-                <feMergeNode in="SourceGraphic"/>
-              </feMerge>
-            </filter>
-          </defs>
-
-          <path d="M424 38 C462 84, 462 136, 422 182" stroke="url(#embossStroke)" stroke-width="3.5" opacity="0.72" filter="url(#softEmboss)"/>
-          <path d="M424 38 C440 84, 440 136, 422 182" stroke="url(#embossStroke)" stroke-width="1.4" opacity="0.40"/>
-          <path d="M320 94 L508 60" stroke="url(#embossStroke)" stroke-width="3.2" opacity="0.75" filter="url(#softEmboss)"/>
-          <path d="M501 57 L521 61 L504 70" stroke="url(#embossStroke)" stroke-width="2.2" opacity="0.68" fill="none"/>
-          <circle cx="254" cy="73" r="19" fill="url(#embossFill)" opacity="0.75" filter="url(#softEmboss)"/>
-          <path d="M249 91 C248 109, 240 117, 228 126" stroke="url(#embossStroke)" stroke-width="6" opacity="0.62" stroke-linecap="round"/>
-          <path d="M257 90 C272 99, 287 101, 320 94" stroke="url(#embossStroke)" stroke-width="5.5" opacity="0.70" stroke-linecap="round"/>
-          <path d="M243 83 C225 73, 214 67, 189 64" stroke="url(#embossStroke)" stroke-width="4.5" opacity="0.55" stroke-linecap="round"/>
-          <path d="M214 118 C262 102, 325 114, 361 133 C384 146, 387 165, 362 171 C313 181, 242 174, 206 158 C183 148, 185 126, 214 118Z"
-                fill="url(#embossFill)" opacity="0.68" filter="url(#softEmboss)"/>
-          <path d="M214 118 C262 102, 325 114, 361 133 C384 146, 387 165, 362 171 C313 181, 242 174, 206 158 C183 148, 185 126, 214 118Z"
-                stroke="url(#embossStroke)" stroke-width="2.2" opacity="0.54"/>
-          <path d="M245 164 L228 206" stroke="url(#embossStroke)" stroke-width="4.2" opacity="0.56" stroke-linecap="round"/>
-          <path d="M286 168 L276 206" stroke="url(#embossStroke)" stroke-width="4.2" opacity="0.56" stroke-linecap="round"/>
-          <path d="M333 166 L344 206" stroke="url(#embossStroke)" stroke-width="4.2" opacity="0.56" stroke-linecap="round"/>
-          <path d="M362 160 L385 205" stroke="url(#embossStroke)" stroke-width="4.2" opacity="0.56" stroke-linecap="round"/>
-          <path d="M188 137 C147 135, 114 124, 85 108 C67 98, 50 86, 38 76" stroke="url(#embossStroke)" stroke-width="4.2" opacity="0.45" stroke-linecap="round"/>
-          <path d="M184 145 C149 148, 122 143, 95 135" stroke="url(#embossStroke)" stroke-width="3.2" opacity="0.34" stroke-linecap="round"/>
-          <path d="M237 59 C225 48, 212 41, 196 38" stroke="url(#embossStroke)" stroke-width="3.5" opacity="0.45" stroke-linecap="round"/>
-          <path d="M235 64 C221 59, 202 57, 180 58" stroke="url(#embossStroke)" stroke-width="2.2" opacity="0.30" stroke-linecap="round"/>
-        </svg>
-      </div>
-
-      <div class="chiron-word">CHIRON</div>
-    </div>
-
-    <div class="nexus-copy">
-      <h1 class="nexus-title">Nexus</h1>
-      <div class="nexus-subtitle">Trusted AI Intelligence</div>
-      <div class="nexus-description">Multi-model reasoning, verification &amp; synthesis</div>
-    </div>
-
-    <div class="under-haze"></div>
-
-    <div class="search-wrap">
-      <div class="search-glow"></div>
-
-      <div class="search-bar">
-        <div class="search-inner-glow"></div>
-        <div class="search-edge-glow"></div>
-
-        <input
-          class="search-input"
-          id="query"
-          type="text"
-          placeholder="Ask Nexus anything..."
-          autocomplete="off"
-        />
-
-        <button class="search-submit" id="search-button" aria-label="Search" type="button">
-          <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="27" cy="27" r="18" stroke="rgba(239,225,255,0.95)" stroke-width="4.2"/>
-            <path d="M40.5 40.5L53.5 53.5" stroke="rgba(239,225,255,0.95)" stroke-width="4.2" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-
-    <section class="results-panel-wrap" id="results-panel-wrap">
-      <div class="results-grid">
-        <div class="panel">
-          <div class="panel-inner">
-            <div class="panel-header">
-              <div class="panel-title-wrap">
-                <h2>Unified Answer</h2>
-                <div class="panel-subtitle">Final response area for the Chiron Nexus broker.</div>
-              </div>
-              <div class="status-badge" id="status-badge">Preview</div>
-            </div>
-
-            <div class="answer-text" id="unified-answer">
-              <p>Search results will appear here.</p>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div class="panel">
-            <div class="panel-inner">
-              <div class="panel-header">
-                <div class="panel-title-wrap">
-                  <h2>Answer Details</h2>
-                  <div class="panel-subtitle">Provider, cache, confidence, access, and timing metadata.</div>
-                </div>
-              </div>
-
-              <div class="meta-grid">
-                <div class="meta-pill" id="pill-confidence">Confidence: --</div>
-                <div class="meta-pill" id="pill-provider">Provider: --</div>
-                <div class="meta-pill" id="pill-cached">Cached: --</div>
-                <div class="meta-pill" id="pill-response-time">Response Time: --</div>
-                <div class="meta-pill" id="pill-cache-type">Cache Type: --</div>
-                <div class="meta-pill" id="pill-access-tier">Access: --</div>
-              </div>
-
-              <div class="mini-stats">
-                <div class="stat-card">
-                  <div class="stat-label">Primary Provider</div>
-                  <div class="stat-value" id="stat-primary-provider">--</div>
-                </div>
-                <div class="stat-card">
-                  <div class="stat-label">Current Access</div>
-                  <div class="stat-value" id="stat-access-tier">PUBLIC</div>
-                </div>
-              </div>
-
-              <div class="footer-note" id="details-footer-note">
-                These controls are styled to match the leather scene and are ready for real query metadata later.
-              </div>
-            </div>
-          </div>
-
-          <div class="panel" style="margin-top: 22px;">
-            <div class="panel-inner">
-              <div class="panel-header">
-                <div class="panel-title-wrap">
-                  <h2>AI Sources</h2>
-                  <div class="panel-subtitle">Providers and source references returned by the API.</div>
-                </div>
-              </div>
-
-              <div class="source-list" id="ai-sources">
-                <div class="source-pill">Nexus</div>
-                <div class="source-pill">Multi-model</div>
-              </div>
-
-              <div class="sources-note" id="sources-note">
-                Source links will appear here once live results are connected.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <footer class="nexus-footer">
-      Nexus is part of the Chiron AI platform, built by Modman Technologies LLC.
-    </footer>
   </div>
 
-  <script>
-    const queryInput = document.getElementById("query");
-    const searchButton = document.getElementById("search-button");
-    const resultsPanelWrap = document.getElementById("results-panel-wrap");
+  <div class="panel">
+    <h2>Answer Details</h2>
 
-    const unifiedAnswer = document.getElementById("unified-answer");
-    const statusBadge = document.getElementById("status-badge");
+    <div class="panel-copy">
+      Provider, cache, confidence, access, and timing metadata.
+    </div>
 
-    const pillConfidence = document.getElementById("pill-confidence");
-    const pillProvider = document.getElementById("pill-provider");
-    const pillCached = document.getElementById("pill-cached");
-    const pillResponseTime = document.getElementById("pill-response-time");
-    const pillCacheType = document.getElementById("pill-cache-type");
-    const pillAccessTier = document.getElementById("pill-access-tier");
+    <div class="tools">
+      <div class="tool" id="tool-confidence">Confidence: --</div>
+      <div class="tool" id="tool-provider">Provider: --</div>
+      <div class="tool" id="tool-cached">Cached: --</div>
+      <div class="tool" id="tool-response-time">Response Time: --</div>
+      <div class="tool" id="tool-cache-type">Cache Type: --</div>
+      <div class="tool" id="tool-access">Access: Public</div>
+    </div>
 
-    const statPrimaryProvider = document.getElementById("stat-primary-provider");
-    const statAccessTier = document.getElementById("stat-access-tier");
+    <div class="stat-grid">
+      <div class="stat">
+        <h4>Primary Provider</h4>
+        <strong id="stat-provider">--</strong>
+      </div>
 
-    const aiSources = document.getElementById("ai-sources");
-    const sourcesNote = document.getElementById("sources-note");
-    const detailsFooterNote = document.getElementById("details-footer-note");
+      <div class="stat">
+        <h4>Current Access</h4>
+        <strong id="stat-access">PUBLIC</strong>
+      </div>
+    </div>
 
-    function escapeHtml(value) {
-      return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }
+    <div class="details-note">
+      Route mode, caching, access state, and synthesis metadata will render here when backend search is connected.
+    </div>
+  </div>
 
-    function showResults() {
-      resultsPanelWrap.classList.add("visible");
-    }
+</div>
 
-    function renderPreview(query) {
-      showResults();
+<footer class="nexus-footer">
+  Nexus is part of the Chiron AI platform, built by Modman Technologies LLC.
+</footer>
 
-      statusBadge.className = "status-badge success";
-      statusBadge.textContent = "Preview";
+<script>
+const queryInput = document.getElementById("query");
+const searchButton = document.getElementById("search-button");
+const answer = document.getElementById("answer");
 
-      unifiedAnswer.innerHTML = `
-        <p>${escapeHtml(`Search preview for "${query}"`)}</p>
-        <p>This layout keeps the wallpaper as the permanent visual foundation while the tools and result surfaces sit on top of it in a more refined way.</p>
-      `;
+const toolConfidence = document.getElementById("tool-confidence");
+const toolProvider = document.getElementById("tool-provider");
+const toolCached = document.getElementById("tool-cached");
+const toolResponseTime = document.getElementById("tool-response-time");
+const toolCacheType = document.getElementById("tool-cache-type");
+const toolAccess = document.getElementById("tool-access");
 
-      pillConfidence.className = "meta-pill medium";
-      pillConfidence.textContent = "Confidence: preview";
+const statProvider = document.getElementById("stat-provider");
+const statAccess = document.getElementById("stat-access");
 
-      pillProvider.className = "meta-pill";
-      pillProvider.textContent = "Provider: Chiron Nexus";
+async function runSearch(){
+  const q = queryInput.value.trim();
+  if(!q) return;
 
-      pillCached.className = "meta-pill";
-      pillCached.textContent = "Cached: preview";
+  answer.innerHTML = "Thinking...";
 
-      pillResponseTime.className = "meta-pill";
-      pillResponseTime.textContent = "Response Time: pending API";
+  try{
+    const started = performance.now();
 
-      pillCacheType.className = "meta-pill";
-      pillCacheType.textContent = "Cache Type: pending";
+    const res = await fetch("/api/search?q=" + encodeURIComponent(q));
+    const data = await res.json();
 
-      pillAccessTier.className = "meta-pill";
-      pillAccessTier.textContent = "Access: Public";
+    const elapsed = Math.round(performance.now() - started);
 
-      statPrimaryProvider.textContent = "Chiron Nexus";
-      statAccessTier.textContent = "PUBLIC";
+    answer.innerHTML = data.answer || "No answer returned.";
 
-      detailsFooterNote.textContent =
-        "Next step: map real query metadata into these preserved tools without changing the wallpaper layer.";
+    toolConfidence.textContent = "Confidence: " + (data.confidence || "--");
+    toolProvider.textContent = "Provider: " + (data.provider || "--");
+    toolCached.textContent = "Cached: " + (data.cached ?? "--");
+    toolResponseTime.textContent = "Response Time: " + elapsed + " ms";
+    toolCacheType.textContent = "Cache Type: " + (data.cache_type || "--");
+    toolAccess.textContent = "Access: " + (data.access_tier || "Public");
 
-      aiSources.innerHTML = `
-        <div class="source-pill">Search preview</div>
-        <div class="source-pill">Leather UI</div>
-        <div class="source-pill">Nexus</div>
-      `;
+    statProvider.textContent = data.provider || "--";
+    statAccess.textContent = String(data.access_tier || "PUBLIC").toUpperCase();
+  }catch(e){
+    answer.innerHTML = "Search failed.";
+  }
+}
 
-      sourcesNote.textContent =
-        "Live providers and source links can be connected later without redesigning this page.";
-    }
+searchButton.addEventListener("click", runSearch);
 
-    function runSearch() {
-      const q = queryInput.value.trim();
-      if (!q) return;
+queryInput.addEventListener("keydown", (event) => {
+  if(event.key === "Enter"){
+    runSearch();
+  }
+});
+</script>
 
-      renderPreview(q);
-    }
-
-    queryInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        runSearch();
-      }
-    });
-
-    searchButton.addEventListener("click", runSearch);
-  </script>
 </body>
 </html>
