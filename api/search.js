@@ -4,6 +4,19 @@ import crypto from "crypto";
 const SEARCH_ENABLED = process.env.SEARCH_ENABLED !== "false";
 const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
 
+/*
+  TEMPORARY FOR AUTH TESTING:
+  - false = bypass rate limiting
+  - true  = enable rate limiting again
+*/
+const ENABLE_RATE_LIMIT = false;
+
+/*
+  TEMPORARY FOR AUTH TESTING:
+  - true = prints backend auth resolution details
+*/
+const AUTH_DEBUG_LOGS = true;
+
 const PROVIDER_RACE_GRACE_MS = 1200;
 const PROVIDER_SECONDARY_DELAY_MS = 350;
 
@@ -170,6 +183,12 @@ const PROVIDERS = [
 function debugLog(...args) {
   if (DEBUG_LOGS) {
     console.error(...args);
+  }
+}
+
+function authLog(...args) {
+  if (AUTH_DEBUG_LOGS) {
+    console.error("[AUTH]", ...args);
   }
 }
 
@@ -506,6 +525,10 @@ async function fetchJson(url, options = {}, label = "Request") {
 
 async function verifyClerkSessionToken(sessionToken) {
   if (!sessionToken || !CLERK_SECRET_KEY) {
+    authLog("verifyClerkSessionToken skipped:", {
+      hasSessionToken: Boolean(sessionToken),
+      hasClerkSecret: Boolean(CLERK_SECRET_KEY)
+    });
     return null;
   }
 
@@ -526,19 +549,24 @@ async function verifyClerkSessionToken(sessionToken) {
     );
 
     if (!response.ok || !data) {
-      debugLog("Clerk verify failed:", response.status);
+      authLog("Clerk verify failed:", response.status);
       return null;
     }
 
+    authLog("Clerk verify success");
     return data;
   } catch (error) {
-    debugLog("Clerk verify error:", error?.message || error);
+    authLog("Clerk verify error:", error?.message || error);
     return null;
   }
 }
 
 async function fetchClerkUser(userId) {
   if (!userId || !CLERK_SECRET_KEY) {
+    authLog("fetchClerkUser skipped:", {
+      hasUserId: Boolean(userId),
+      hasClerkSecret: Boolean(CLERK_SECRET_KEY)
+    });
     return null;
   }
 
@@ -555,13 +583,14 @@ async function fetchClerkUser(userId) {
     );
 
     if (!response.ok || !data) {
-      debugLog("Clerk user fetch failed:", response.status);
+      authLog("Clerk user fetch failed:", response.status);
       return null;
     }
 
+    authLog("Clerk user fetch success:", userId);
     return data;
   } catch (error) {
-    debugLog("Clerk user fetch error:", error?.message || error);
+    authLog("Clerk user fetch error:", error?.message || error);
     return null;
   }
 }
@@ -596,6 +625,7 @@ function getPrimaryEmailFromClerkUser(user) {
 
 async function getVerifiedIdentity(req) {
   if (!CLERK_SECRET_KEY) {
+    authLog("No CLERK_SECRET_KEY present");
     return null;
   }
 
@@ -610,12 +640,20 @@ async function getVerifiedIdentity(req) {
 
   const sessionToken = bearerToken || clerkSessionCookie;
 
+  authLog("AUTH header present:", Boolean(bearerHeader));
+  authLog("AUTH header prefix:", bearerHeader ? bearerHeader.slice(0, 32) : "NONE");
+  authLog("Bearer token present:", Boolean(bearerToken));
+  authLog("Bearer token prefix:", bearerToken ? bearerToken.slice(0, 24) : "NONE");
+  authLog("Cookie token present:", Boolean(clerkSessionCookie));
+
   if (!sessionToken) {
+    authLog("No session token found");
     return null;
   }
 
   const verifiedSession = await verifyClerkSessionToken(sessionToken);
   if (!verifiedSession) {
+    authLog("Verified session is null");
     return null;
   }
 
@@ -625,12 +663,16 @@ async function getVerifiedIdentity(req) {
     verifiedSession.user?.id ||
     "";
 
+  authLog("Resolved userId from session:", userId || null);
+
   if (!userId) {
+    authLog("No userId found in verified session");
     return null;
   }
 
   const user = await fetchClerkUser(userId);
   if (!user) {
+    authLog("No Clerk user payload returned");
     return {
       userId,
       email: "",
@@ -639,9 +681,14 @@ async function getVerifiedIdentity(req) {
     };
   }
 
+  const email = getPrimaryEmailFromClerkUser(user);
+
+  authLog("Resolved auth email:", email || null);
+  authLog("Resolved auth userId:", userId || null);
+
   return {
     userId,
-    email: getPrimaryEmailFromClerkUser(user),
+    email,
     session: verifiedSession,
     user
   };
@@ -663,20 +710,26 @@ async function getLiveAccessMode(req) {
   if (identity?.userId) {
     const admins = getAdminIdentifiers();
 
-    if (admins.userIds.includes(identity.userId)) {
+    const normalizedEmail = String(identity.email || "").trim().toLowerCase();
+    const normalizedUserId = String(identity.userId || "").trim();
+
+    const adminEmailMatch =
+      Boolean(normalizedEmail) && admins.emails.includes(normalizedEmail);
+    const adminUserIdMatch =
+      Boolean(normalizedUserId) && admins.userIds.includes(normalizedUserId);
+
+    authLog("Admin email match:", adminEmailMatch);
+    authLog("Admin userId match:", adminUserIdMatch);
+
+    if (adminUserIdMatch || adminEmailMatch) {
+      authLog("Resolved access tier:", ACCESS_TIERS.ADMIN);
       return {
         accessTier: ACCESS_TIERS.ADMIN,
         identity
       };
     }
 
-    if (identity.email && admins.emails.includes(identity.email)) {
-      return {
-        accessTier: ACCESS_TIERS.ADMIN,
-        identity
-      };
-    }
-
+    authLog("Resolved access tier:", ACCESS_TIERS.PAID);
     return {
       accessTier: ACCESS_TIERS.PAID,
       identity
@@ -687,12 +740,14 @@ async function getLiveAccessMode(req) {
   const adminKeyEnv = process.env.CHIRON_ADMIN_KEY || "";
 
   if (adminKeyEnv && adminKeyHeader && adminKeyHeader === adminKeyEnv) {
+    authLog("Resolved access tier via admin key:", ACCESS_TIERS.ADMIN);
     return {
       accessTier: ACCESS_TIERS.ADMIN,
       identity: null
     };
   }
 
+  authLog("Resolved access tier:", ACCESS_TIERS.PUBLIC);
   return {
     accessTier: ACCESS_TIERS.PUBLIC,
     identity: null
@@ -2780,22 +2835,26 @@ export default async function handler(req, res) {
     });
   }
 
-  const fingerprintRateKey = `ratelimit:fingerprint:${fingerprint}`;
-  const fingerprintWindowSeconds = 60;
-  const maxFingerprintRequestsPerWindow = 12;
+  if (ENABLE_RATE_LIMIT) {
+    const fingerprintRateKey = `ratelimit:fingerprint:${fingerprint}`;
+    const fingerprintWindowSeconds = 60;
+    const maxFingerprintRequestsPerWindow = 12;
 
-  const fingerprintCount = await kv.incr(fingerprintRateKey);
+    const fingerprintCount = await kv.incr(fingerprintRateKey);
 
-  if (fingerprintCount === 1) {
-    await kv.expire(fingerprintRateKey, fingerprintWindowSeconds);
-  }
+    if (fingerprintCount === 1) {
+      await kv.expire(fingerprintRateKey, fingerprintWindowSeconds);
+    }
 
-  if (fingerprintCount > maxFingerprintRequestsPerWindow) {
-    await incrementMetricDual("rate_limited_fingerprint");
-    return res.status(429).json({
-      answer: "Too many requests. Please wait a minute and try again.",
-      sources: []
-    });
+    if (fingerprintCount > maxFingerprintRequestsPerWindow) {
+      await incrementMetricDual("rate_limited_fingerprint");
+      return res.status(429).json({
+        answer: "Too many requests. Please wait a minute and try again.",
+        sources: []
+      });
+    }
+  } else {
+    debugLog("Rate limiting bypassed for fingerprint window");
   }
 
   const { query } = req.body || {};
@@ -2814,47 +2873,55 @@ export default async function handler(req, res) {
   await incrementMetric("request_by_query_type", queryType, 1);
   await incrementMetric("request_by_difficulty", queryDifficulty, 1);
 
-  const queryBurstFingerprint = crypto
-    .createHash("sha256")
-    .update(`${fingerprint}|${normalizedQuery}`)
-    .digest("hex")
-    .slice(0, 24);
+  if (ENABLE_RATE_LIMIT) {
+    const queryBurstFingerprint = crypto
+      .createHash("sha256")
+      .update(`${fingerprint}|${normalizedQuery}`)
+      .digest("hex")
+      .slice(0, 24);
 
-  const queryBurstKey = `ratelimit:burst:${queryBurstFingerprint}`;
-  const queryBurstWindowSeconds = 30;
-  const maxSameQueryBurst = 3;
+    const queryBurstKey = `ratelimit:burst:${queryBurstFingerprint}`;
+    const queryBurstWindowSeconds = 30;
+    const maxSameQueryBurst = 3;
 
-  const queryBurstCount = await kv.incr(queryBurstKey);
+    const queryBurstCount = await kv.incr(queryBurstKey);
 
-  if (queryBurstCount === 1) {
-    await kv.expire(queryBurstKey, queryBurstWindowSeconds);
+    if (queryBurstCount === 1) {
+      await kv.expire(queryBurstKey, queryBurstWindowSeconds);
+    }
+
+    if (queryBurstCount > maxSameQueryBurst) {
+      await incrementMetricDual("rate_limited_query_burst");
+      return res.status(429).json({
+        answer: "Please wait before repeating the same search.",
+        sources: []
+      });
+    }
+  } else {
+    debugLog("Rate limiting bypassed for repeat-query window");
   }
 
-  if (queryBurstCount > maxSameQueryBurst) {
-    await incrementMetricDual("rate_limited_query_burst");
-    return res.status(429).json({
-      answer: "Please wait before repeating the same search.",
-      sources: []
-    });
-  }
+  if (ENABLE_RATE_LIMIT) {
+    const ip = getClientIp(req);
+    const rateKey = `ratelimit:${ip}`;
+    const rateWindowSeconds = 60;
+    const maxRequestsPerWindow = 10;
 
-  const ip = getClientIp(req);
-  const rateKey = `ratelimit:${ip}`;
-  const rateWindowSeconds = 60;
-  const maxRequestsPerWindow = 10;
+    const currentCount = await kv.incr(rateKey);
 
-  const currentCount = await kv.incr(rateKey);
+    if (currentCount === 1) {
+      await kv.expire(rateKey, rateWindowSeconds);
+    }
 
-  if (currentCount === 1) {
-    await kv.expire(rateKey, rateWindowSeconds);
-  }
-
-  if (currentCount > maxRequestsPerWindow) {
-    await incrementMetricDual("rate_limited_ip");
-    return res.status(429).json({
-      answer: "Too many searches. Please wait a minute and try again.",
-      sources: []
-    });
+    if (currentCount > maxRequestsPerWindow) {
+      await incrementMetricDual("rate_limited_ip");
+      return res.status(429).json({
+        answer: "Too many searches. Please wait a minute and try again.",
+        sources: []
+      });
+    }
+  } else {
+    debugLog("Rate limiting bypassed for IP window");
   }
 
   const cacheKey = `search:v30:${normalizedQuery}`;
