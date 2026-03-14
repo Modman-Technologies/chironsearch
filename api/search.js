@@ -7,8 +7,8 @@ const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
 
 /*
   TEMPORARY FOR AUTH TESTING:
-  - false = bypass rate limiting
-  - true  = enable rate limiting again
+  - false = bypass fingerprint/IP repeat protection
+  - true  = enable those protections again
 */
 const ENABLE_RATE_LIMIT = false;
 
@@ -17,6 +17,14 @@ const ENABLE_RATE_LIMIT = false;
   - true = prints backend auth resolution details
 */
 const AUTH_DEBUG_LOGS = true;
+
+/*
+  Product-level daily search quotas.
+  These are separate from anti-abuse rate limits.
+  They are meant to encourage sign-in / upgrade.
+*/
+const PUBLIC_DAILY_SEARCH_LIMIT = 8;
+const FREE_DAILY_SEARCH_LIMIT = 40;
 
 const PROVIDER_RACE_GRACE_MS = 1200;
 const PROVIDER_SECONDARY_DELAY_MS = 350;
@@ -490,6 +498,53 @@ function getDailyBucket() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getQuotaKey(accessTier, subjectKey, bucket) {
+  return `quota:v1:${accessTier}:${subjectKey}:${bucket}`;
+}
+
+function getDailySearchLimitForTier(accessTier) {
+  if (accessTier === ACCESS_TIERS.PUBLIC) {
+    return PUBLIC_DAILY_SEARCH_LIMIT;
+  }
+
+  if (accessTier === ACCESS_TIERS.FREE) {
+    return FREE_DAILY_SEARCH_LIMIT;
+  }
+
+  return null;
+}
+
+function getQuotaSubjectKey(req, accessTier, identity) {
+  if (accessTier === ACCESS_TIERS.FREE) {
+    const userId = String(identity?.userId || "").trim();
+    const email = String(identity?.email || "").trim().toLowerCase();
+
+    if (userId) {
+      return `user:${userId}`;
+    }
+
+    if (email) {
+      return `email:${email}`;
+    }
+  }
+
+  return `fingerprint:${buildRequestFingerprint(req)}`;
+}
+
+function buildTierCapabilities(accessTier) {
+  const cacheAccess = true;
+  const liveSearch =
+    accessTier === ACCESS_TIERS.PAID || accessTier === ACCESS_TIERS.ADMIN;
+  const upgradeRequired =
+    accessTier === ACCESS_TIERS.PUBLIC || accessTier === ACCESS_TIERS.FREE;
+
+  return {
+    cache_access: cacheAccess,
+    live_search: liveSearch,
+    upgrade_required: upgradeRequired
+  };
+}
+
 async function incrementMetric(metricName, bucket = "global", amount = 1) {
   try {
     const key = getMetricsKey(metricName, bucket);
@@ -700,10 +755,6 @@ async function getVerifiedIdentity(req) {
   - FREE: authenticated, cache-only
   - PAID: authenticated + paid allowlist, live search allowed
   - ADMIN: authenticated + admin allowlist or admin key, unrestricted
-
-  IMPORTANT:
-  - Client-supplied tier headers are never trusted.
-  - Backend/session is the source of truth.
 */
 async function getLiveAccessMode(req) {
   const identity = await getVerifiedIdentity(req);
@@ -787,12 +838,98 @@ function shouldForceLiveSearch(req, accessTier) {
   return getHeader(req, "x-chiron-force-live").toLowerCase() === "true";
 }
 
+async function enforceTierSearchQuota(req, accessTier, identity) {
+  const limit = getDailySearchLimitForTier(accessTier);
+
+  if (limit == null) {
+    return {
+      allowed: true,
+      limit: null,
+      used: null,
+      remaining: null
+    };
+  }
+
+  const bucket = getDailyBucket();
+  const subjectKey = getQuotaSubjectKey(req, accessTier, identity);
+  const key = getQuotaKey(accessTier, subjectKey, bucket);
+
+  const used = await kv.incr(key);
+
+  if (used === 1) {
+    await kv.expire(key, 2 * 24 * 60 * 60);
+  }
+
+  const remaining = Math.max(0, limit - used);
+
+  if (used > limit) {
+    return {
+      allowed: false,
+      limit,
+      used,
+      remaining: 0,
+      bucket
+    };
+  }
+
+  return {
+    allowed: true,
+    limit,
+    used,
+    remaining,
+    bucket
+  };
+}
+
+function buildQuotaExceededResponse({
+  accessTier,
+  requestStart,
+  quota
+}) {
+  const isPublic = accessTier === ACCESS_TIERS.PUBLIC;
+
+  return {
+    answer: isPublic
+      ? "You have reached the public daily search limit. Sign in for more cached searches."
+      : "You have reached the free daily search limit. Upgrade for fresh searches and higher access.",
+    sources: [],
+    source_links: [],
+    reference_image: null,
+    historical_references: [],
+    provider: "chiron-access",
+    confidence: "low",
+    query_type: "unknown",
+    query_difficulty: "unknown",
+    route_mode: "quota-blocked",
+    panel_size_initial: 0,
+    panel_size_final: 0,
+    consensus_level: null,
+    arbitration_reason: null,
+    outlier_providers: [],
+    synthesis_skipped: false,
+    cached: false,
+    cache_type: "none",
+    response_time_ms: Date.now() - requestStart,
+    access_tier: accessTier,
+    live_search_used: false,
+    live_search_available: false,
+    cache_only_mode: true,
+    upgrade_required: true,
+    quota_limited: true,
+    daily_search_limit: quota.limit,
+    daily_search_used: quota.used,
+    daily_search_remaining: quota.remaining,
+    tier_capabilities: buildTierCapabilities(accessTier)
+  };
+}
+
 function buildCacheMissAccessResponse({
   normalizedQuery,
   queryType,
   queryDifficulty,
   requestStart,
-  accessTier
+  accessTier,
+  quota
 }) {
   const isFree = accessTier === ACCESS_TIERS.FREE;
 
@@ -825,7 +962,11 @@ function buildCacheMissAccessResponse({
     cache_miss: true,
     query: normalizedQuery,
     request_queued: false,
-    upgrade_required: true
+    upgrade_required: true,
+    daily_search_limit: quota?.limit ?? null,
+    daily_search_used: quota?.used ?? null,
+    daily_search_remaining: quota?.remaining ?? null,
+    tier_capabilities: buildTierCapabilities(accessTier)
   };
 }
 
@@ -2819,7 +2960,8 @@ export default async function handler(req, res) {
   if (!SEARCH_ENABLED) {
     return res.status(503).json({
       answer: "Search is temporarily disabled.",
-      sources: []
+      sources: [],
+      tier_capabilities: buildTierCapabilities(ACCESS_TIERS.PUBLIC)
     });
   }
 
@@ -2832,15 +2974,18 @@ export default async function handler(req, res) {
     await incrementMetricDual("forbidden_origin");
     return res.status(403).json({
       answer: "Forbidden.",
-      sources: []
+      sources: [],
+      tier_capabilities: buildTierCapabilities(ACCESS_TIERS.PUBLIC)
     });
   }
 
   const accessContext = await getLiveAccessMode(req);
   const accessTier = accessContext.accessTier;
+  const identity = accessContext.identity;
   const liveSearchAllowed = isLiveSearchAllowed(accessTier);
   const cacheOnlyMode = isCacheOnlyTier(accessTier);
   const forceLive = shouldForceLiveSearch(req, accessTier);
+  const tierCapabilities = buildTierCapabilities(accessTier);
 
   await incrementMetricDual("request_total");
   await incrementMetric("request_by_access_tier", accessTier, 1);
@@ -2848,21 +2993,27 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
       answer: "Method not allowed.",
-      sources: []
+      sources: [],
+      access_tier: accessTier,
+      tier_capabilities: tierCapabilities
     });
   }
 
   if (!contentType || !contentType.toLowerCase().includes("application/json")) {
     return res.status(415).json({
       answer: "Unsupported content type.",
-      sources: []
+      sources: [],
+      access_tier: accessTier,
+      tier_capabilities: tierCapabilities
     });
   }
 
   if (!userAgent || userAgent.length < 10) {
     return res.status(400).json({
       answer: "Invalid request.",
-      sources: []
+      sources: [],
+      access_tier: accessTier,
+      tier_capabilities: tierCapabilities
     });
   }
 
@@ -2881,7 +3032,9 @@ export default async function handler(req, res) {
       await incrementMetricDual("rate_limited_fingerprint");
       return res.status(429).json({
         answer: "Too many requests. Please wait a minute and try again.",
-        sources: []
+        sources: [],
+        access_tier: accessTier,
+        tier_capabilities: tierCapabilities
       });
     }
   } else {
@@ -2894,7 +3047,9 @@ export default async function handler(req, res) {
   if (!normalizedQuery) {
     return res.status(400).json({
       answer: "No query provided.",
-      sources: []
+      sources: [],
+      access_tier: accessTier,
+      tier_capabilities: tierCapabilities
     });
   }
 
@@ -2925,7 +3080,9 @@ export default async function handler(req, res) {
       await incrementMetricDual("rate_limited_query_burst");
       return res.status(429).json({
         answer: "Please wait before repeating the same search.",
-        sources: []
+        sources: [],
+        access_tier: accessTier,
+        tier_capabilities: tierCapabilities
       });
     }
   } else {
@@ -2948,20 +3105,36 @@ export default async function handler(req, res) {
       await incrementMetricDual("rate_limited_ip");
       return res.status(429).json({
         answer: "Too many searches. Please wait a minute and try again.",
-        sources: []
+        sources: [],
+        access_tier: accessTier,
+        tier_capabilities: tierCapabilities
       });
     }
   } else {
     debugLog("Rate limiting bypassed for IP window");
   }
 
-  const cacheKey = `search:v30:${normalizedQuery}`;
+  const quota = await enforceTierSearchQuota(req, accessTier, identity);
+
+  if (!quota.allowed) {
+    await incrementMetric("quota_limited_by_tier", accessTier, 1);
+
+    return res.status(429).json(
+      buildQuotaExceededResponse({
+        accessTier,
+        requestStart,
+        quota
+      })
+    );
+  }
+
+  const cacheKey = `search:v31:${normalizedQuery}`;
   const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
   const semanticFingerprint = semanticEnabled
     ? fingerprintQuery(normalizedQuery)
     : "";
   const semanticKey = semanticFingerprint
-    ? `semantic:v16:${semanticFingerprint}`
+    ? `semantic:v17:${semanticFingerprint}`
     : "";
 
   try {
@@ -2978,7 +3151,11 @@ export default async function handler(req, res) {
           access_tier: accessTier,
           live_search_used: false,
           live_search_available: liveSearchAllowed,
-          cache_only_mode: cacheOnlyMode
+          cache_only_mode: cacheOnlyMode,
+          daily_search_limit: quota.limit,
+          daily_search_used: quota.used,
+          daily_search_remaining: quota.remaining,
+          tier_capabilities: tierCapabilities
         });
       }
 
@@ -2997,7 +3174,11 @@ export default async function handler(req, res) {
             access_tier: accessTier,
             live_search_used: false,
             live_search_available: liveSearchAllowed,
-            cache_only_mode: cacheOnlyMode
+            cache_only_mode: cacheOnlyMode,
+            daily_search_limit: quota.limit,
+            daily_search_used: quota.used,
+            daily_search_remaining: quota.remaining,
+            tier_capabilities: tierCapabilities
           });
         }
       }
@@ -3012,7 +3193,8 @@ export default async function handler(req, res) {
         queryType,
         queryDifficulty,
         requestStart,
-        accessTier
+        accessTier,
+        quota
       });
 
       return res.status(200).json({
@@ -3061,7 +3243,12 @@ export default async function handler(req, res) {
       await incrementMetricDual("no_provider_configured");
       return res.status(500).json({
         answer: "No AI providers are configured.",
-        sources: []
+        sources: [],
+        access_tier: accessTier,
+        daily_search_limit: quota.limit,
+        daily_search_used: quota.used,
+        daily_search_remaining: quota.remaining,
+        tier_capabilities: tierCapabilities
       });
     }
 
@@ -3221,7 +3408,12 @@ export default async function handler(req, res) {
       await incrementMetricDual("answer_generation_failed");
       return res.status(500).json({
         answer: "AI providers failed to return a usable answer.",
-        sources: []
+        sources: [],
+        access_tier: accessTier,
+        daily_search_limit: quota.limit,
+        daily_search_used: quota.used,
+        daily_search_remaining: quota.remaining,
+        tier_capabilities: tierCapabilities
       });
     }
 
@@ -3259,7 +3451,11 @@ export default async function handler(req, res) {
       access_tier: accessTier,
       live_search_used: true,
       live_search_available: liveSearchAllowed,
-      cache_only_mode: cacheOnlyMode
+      cache_only_mode: cacheOnlyMode,
+      daily_search_limit: quota.limit,
+      daily_search_used: quota.used,
+      daily_search_remaining: quota.remaining,
+      tier_capabilities: tierCapabilities
     };
 
     if (finalAnswer) {
@@ -3284,7 +3480,12 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       answer: "Error contacting AI services.",
-      sources: []
+      sources: [],
+      access_tier: accessTier,
+      daily_search_limit: quota.limit,
+      daily_search_used: quota.used,
+      daily_search_remaining: quota.remaining,
+      tier_capabilities: tierCapabilities
     });
   }
 }
