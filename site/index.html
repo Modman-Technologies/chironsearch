@@ -1,343 +1,838 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nexus — Trusted AI Intelligence</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexus — Trusted AI Intelligence</title>
 
-<script
-async
-crossorigin="anonymous"
-data-clerk-publishable-key="pk_test_Z3Jvd24tamVubmV0LTMyLmNsZXJrLmFjY291bnRzLmRldiQ"
-src="https://grown-jennet-32.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js">
-</script>
+  <script
+    id="clerk-script"
+    crossorigin="anonymous"
+    data-clerk-publishable-key="pk_test_Z3Jvd24tamVubmV0LTMyLmNsZXJrLmFjY291bnRzLmRldiQ"
+    src="https://grown-jennet-32.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js">
+  </script>
 
-<style>
+  <style>
+    :root {
+      --text: #f4f2fb;
+      --muted: #b7b1cc;
+      --muted-2: #8f88a9;
+      --panel: rgba(10, 10, 18, 0.50);
+      --panel-strong: rgba(12, 11, 22, 0.68);
+      --border: rgba(170, 155, 255, 0.12);
+      --border-strong: rgba(170, 155, 255, 0.18);
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
+      --glow: 0 0 24px rgba(124, 101, 255, 0.14);
+      --accent: #8f79ff;
+      --accent-soft: rgba(143, 121, 255, 0.18);
+      --success: #86efac;
+      --warn: #fcd34d;
+      --danger: #fca5a5;
+      --max: 1380px;
+    }
 
-:root{
---text:#f2f1f8;
---muted:#a9a4c3;
---panel:rgba(12,10,20,.65);
---panel-border:rgba(180,160,255,.15);
---accent:#7b6cff;
-}
+    * {
+      box-sizing: border-box;
+    }
 
-*{box-sizing:border-box}
+    html,
+    body {
+      min-height: 100%;
+    }
 
-body{
-margin:0;
-font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;
-color:var(--text);
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(5, 4, 10, 0.44), rgba(5, 4, 10, 0.76)),
+        #07070c url("/background.png") no-repeat center top;
+      background-size: max(1520px, 100vw);
+    }
 
-background-image:url("/background.png");
-background-size:cover;
-background-position:center;
-background-attachment:fixed;
-}
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 52% 22%, rgba(141, 116, 255, 0.10), transparent 18%),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.18));
+      z-index: 0;
+    }
 
-body::before{
-content:"";
-position:fixed;
-inset:0;
-background:linear-gradient(
-rgba(6,6,10,.65),
-rgba(6,6,10,.85)
-);
-z-index:-1;
-}
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
 
-/* HEADER */
+    button,
+    input {
+      font: inherit;
+    }
 
-header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-padding:20px 40px;
-}
+    .page {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      padding: 18px 22px 30px;
+    }
 
-.logo{
-height:40px;
-}
+    .shell {
+      max-width: var(--max);
+      margin: 0 auto;
+    }
 
-.account{
-display:flex;
-gap:10px;
-}
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 26px;
+    }
 
-button{
-background:var(--panel);
-border:1px solid var(--panel-border);
-color:var(--text);
-padding:8px 14px;
-border-radius:6px;
-cursor:pointer;
-}
+    .brand img {
+      height: 42px;
+      width: auto;
+      display: block;
+      filter:
+        drop-shadow(0 6px 14px rgba(0, 0, 0, 0.28))
+        drop-shadow(0 0 12px rgba(143, 121, 255, 0.10));
+    }
 
-/* HERO */
+    .account-tools {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
 
-.hero{
-text-align:center;
-padding:80px 20px 60px;
-}
+    .account-badge {
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: rgba(14, 13, 24, 0.68);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      box-shadow: var(--glow);
+      backdrop-filter: blur(10px);
+    }
 
-.hero h1{
-font-size:64px;
-letter-spacing:6px;
-margin:0;
-font-weight:600;
-}
+    .ghost-btn {
+      min-height: 38px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(14, 13, 24, 0.62);
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+      backdrop-filter: blur(10px);
+    }
 
-.hero p{
-margin-top:12px;
-color:var(--muted);
-}
+    .ghost-btn:hover {
+      border-color: var(--border-strong);
+      background: rgba(18, 17, 30, 0.78);
+      transform: translateY(-1px);
+    }
 
-/* SEARCH */
+    .hero {
+      padding: 52px 0 18px;
+      display: flex;
+      justify-content: center;
+      text-align: center;
+    }
 
-.searchbar{
-margin-top:30px;
-display:flex;
-justify-content:center;
-gap:10px;
-}
+    .hero-inner {
+      width: min(720px, 100%);
+    }
 
-.searchbar input{
-width:420px;
-padding:14px;
-border-radius:8px;
-border:1px solid var(--panel-border);
-background:rgba(20,18,35,.7);
-color:var(--text);
-}
+    .title {
+      margin: 0;
+      font-size: clamp(42px, 6vw, 62px);
+      line-height: 0.98;
+      letter-spacing: 0.08em;
+      font-weight: 650;
+      color: #f5f2fb;
+      text-shadow:
+        0 10px 24px rgba(0, 0, 0, 0.36),
+        0 0 22px rgba(180, 166, 255, 0.10);
+    }
 
-.searchbar button{
-padding:14px 20px;
-}
+    .subtitle {
+      margin-top: 8px;
+      color: #d9d4eb;
+      font-size: 15px;
+      letter-spacing: 0.02em;
+    }
 
-/* MAIN GRID */
+    .search-wrap {
+      margin-top: 18px;
+      display: flex;
+      justify-content: center;
+    }
 
-.main{
-max-width:1300px;
-margin:auto;
-padding:40px;
-display:grid;
-grid-template-columns:2fr 1fr;
-gap:40px;
-}
+    .search-bar {
+      width: min(620px, 100%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(12, 11, 21, 0.56), rgba(10, 10, 18, 0.68));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow), var(--glow);
+      backdrop-filter: blur(14px);
+    }
 
-/* ANSWER */
+    .search-bar input {
+      flex: 1;
+      min-width: 0;
+      height: 46px;
+      padding: 0 14px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      outline: none;
+      background: rgba(18, 17, 30, 0.56);
+      color: var(--text);
+    }
 
-.answer{
-background:var(--panel);
-border:1px solid var(--panel-border);
-padding:30px;
-border-radius:10px;
-line-height:1.6;
-min-height:200px;
-}
+    .search-bar input::placeholder {
+      color: var(--muted-2);
+    }
 
-/* INSIGHT PANEL */
+    .search-btn {
+      height: 46px;
+      padding: 0 18px;
+      border: 1px solid rgba(171, 154, 255, 0.22);
+      border-radius: 12px;
+      background:
+        linear-gradient(180deg, rgba(120, 95, 255, 0.20), rgba(78, 55, 170, 0.24)),
+        rgba(18, 17, 30, 0.8);
+      color: #f5f2ff;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(143, 121, 255, 0.16);
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    }
 
-.insight{
-background:var(--panel);
-border:1px solid var(--panel-border);
-padding:24px;
-border-radius:10px;
-}
+    .search-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(171, 154, 255, 0.34);
+    }
 
-.insight h3{
-margin-top:0;
-margin-bottom:16px;
-font-size:18px;
-}
+    .search-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
 
-.row{
-display:flex;
-justify-content:space-between;
-padding:8px 0;
-border-bottom:1px solid rgba(255,255,255,.05);
-font-size:14px;
-color:var(--muted);
-}
+    .hero-note {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted-2);
+    }
 
-/* SOURCES */
+    .layout {
+      margin-top: 44px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.75fr);
+      gap: 24px;
+      align-items: start;
+    }
 
-.sources{
-max-width:1300px;
-margin:20px auto 80px;
-padding:0 40px;
-}
+    .panel {
+      background: linear-gradient(180deg, var(--panel), var(--panel-strong));
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      box-shadow: var(--shadow), var(--glow);
+      backdrop-filter: blur(14px);
+    }
 
-.sources h3{
-margin-bottom:12px;
-}
+    .panel-pad {
+      padding: 24px;
+    }
 
-.source{
-margin-bottom:8px;
-}
+    .answer-panel {
+      min-height: 300px;
+    }
 
-.source a{
-color:#c8c4ff;
-text-decoration:none;
-}
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
 
-/* FOOTER */
+    .panel-title {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
 
-footer{
-text-align:center;
-padding:30px;
-color:var(--muted);
-font-size:13px;
-}
+    .panel-subtitle {
+      margin-top: 6px;
+      color: var(--muted-2);
+      font-size: 13px;
+      line-height: 1.55;
+    }
 
-@media (max-width:900px){
+    .status {
+      flex-shrink: 0;
+      padding: 7px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(19, 18, 31, 0.56);
+      font-size: 12px;
+    }
 
-.main{
-grid-template-columns:1fr;
-}
+    .answer-text {
+      line-height: 1.72;
+      color: #ece8f7;
+      font-size: 15px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 180px;
+    }
 
-.hero h1{
-font-size:42px;
-}
+    .answer-text p {
+      margin: 0 0 1em;
+    }
 
-.searchbar input{
-width:100%;
-}
+    .answer-text p:last-child {
+      margin-bottom: 0;
+    }
 
-}
+    .insight-panel .panel-pad {
+      padding: 20px 20px 18px;
+    }
 
-</style>
+    .insight-grid {
+      display: grid;
+      gap: 2px;
+    }
+
+    .insight-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .insight-row:last-child {
+      border-bottom: none;
+    }
+
+    .insight-label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .insight-value {
+      color: var(--text);
+      font-size: 13px;
+      text-align: right;
+      max-width: 180px;
+      word-break: break-word;
+    }
+
+    .meta-note {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--muted-2);
+      line-height: 1.55;
+    }
+
+    .tier-capabilities {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .cap-pill {
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid rgba(171, 154, 255, 0.16);
+      background: rgba(18, 17, 30, 0.52);
+      color: #dcd5f2;
+    }
+
+    .sources-panel {
+      margin-top: 22px;
+    }
+
+    .sources-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .source-item {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(14, 13, 24, 0.50);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: border-color 0.18s ease, background 0.18s ease;
+    }
+
+    .source-item:hover {
+      border-color: rgba(171, 154, 255, 0.16);
+      background: rgba(18, 17, 30, 0.62);
+    }
+
+    .source-title {
+      font-size: 14px;
+      color: #e8e2f6;
+    }
+
+    .source-provider {
+      margin-top: 4px;
+      color: var(--muted-2);
+      font-size: 12px;
+    }
+
+    .empty {
+      color: var(--muted-2);
+      font-size: 14px;
+    }
+
+    .footer {
+      margin-top: 26px;
+      text-align: center;
+      color: #b5aec8;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 1080px) {
+      body {
+        background-size: cover;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .page {
+        padding: 14px 14px 26px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .brand img {
+        height: 34px;
+      }
+
+      .hero {
+        padding-top: 36px;
+      }
+
+      .title {
+        font-size: 38px;
+      }
+
+      .search-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .search-btn {
+        width: 100%;
+      }
+
+      .panel-pad {
+        padding: 18px;
+      }
+    }
+  </style>
 </head>
-
 <body>
+  <div class="page">
+    <div class="shell">
+      <div class="topbar">
+        <a class="brand" href="/" aria-label="Modman Technologies LLC">
+          <img src="/modman-technologies-full.png" alt="Modman Technologies LLC" />
+        </a>
 
-<header>
+        <div class="account-tools">
+          <div class="account-badge" id="account-badge">Signed out</div>
+          <button class="ghost-btn" id="signin" type="button">Sign In</button>
+          <button class="ghost-btn" id="signout" type="button">Sign Out</button>
+        </div>
+      </div>
 
-<img src="/modman-technologies-full.png" class="logo">
+      <section class="hero">
+        <div class="hero-inner">
+          <h1 class="title">NEXUS</h1>
+          <div class="subtitle">Trusted AI Intelligence</div>
 
-<div class="account">
-<button id="signin">Sign In</button>
-<button id="signout">Sign Out</button>
-</div>
+          <div class="search-wrap">
+            <div class="search-bar">
+              <input id="query" type="text" placeholder="Search Nexus…" />
+              <button class="search-btn" id="searchBtn" type="button">Search</button>
+            </div>
+          </div>
 
-</header>
+          <div class="hero-note">Powered by Chiron</div>
+        </div>
+      </section>
 
-<section class="hero">
+      <section class="layout">
+        <div>
+          <div class="panel answer-panel">
+            <div class="panel-pad">
+              <div class="panel-header">
+                <div>
+                  <h2 class="panel-title">Unified Answer</h2>
+                  <div class="panel-subtitle">Synthesized response returned by the Chiron Nexus broker.</div>
+                </div>
+                <div class="status" id="status">Idle</div>
+              </div>
 
-<h1>NEXUS</h1>
-<p>Trusted AI Intelligence</p>
+              <div class="answer-text" id="answer">Ask a question to begin.</div>
+            </div>
+          </div>
 
-<div class="searchbar">
-<input id="query" placeholder="Search Nexus…" />
-<button id="searchBtn">Search</button>
-</div>
+          <div class="panel sources-panel">
+            <div class="panel-pad">
+              <div class="panel-header">
+                <div>
+                  <h2 class="panel-title">Sources</h2>
+                  <div class="panel-subtitle">Provider references and linked source material.</div>
+                </div>
+              </div>
 
-</section>
+              <div class="sources-list" id="sources">
+                <div class="empty">No sources yet.</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-<section class="main">
+        <aside class="panel insight-panel">
+          <div class="panel-pad">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Insight</h2>
+                <div class="panel-subtitle">Search mode, confidence, caching, and access metadata.</div>
+              </div>
+            </div>
 
-<div class="answer" id="answer">
-Ask a question to begin.
-</div>
+            <div class="insight-grid">
+              <div class="insight-row">
+                <div class="insight-label">Account</div>
+                <div class="insight-value" id="account-email">--</div>
+              </div>
 
-<div class="insight">
+              <div class="insight-row">
+                <div class="insight-label">Access</div>
+                <div class="insight-value" id="tier">--</div>
+              </div>
 
-<h3>Insight</h3>
+              <div class="insight-row">
+                <div class="insight-label">Provider</div>
+                <div class="insight-value" id="provider">--</div>
+              </div>
 
-<div class="row"><span>Access</span><span id="tier">--</span></div>
-<div class="row"><span>Provider</span><span id="provider">--</span></div>
-<div class="row"><span>Confidence</span><span id="confidence">--</span></div>
-<div class="row"><span>Cache</span><span id="cache">--</span></div>
-<div class="row"><span>Latency</span><span id="latency">--</span></div>
+              <div class="insight-row">
+                <div class="insight-label">Confidence</div>
+                <div class="insight-value" id="confidence">--</div>
+              </div>
 
-</div>
+              <div class="insight-row">
+                <div class="insight-label">Cache</div>
+                <div class="insight-value" id="cache">--</div>
+              </div>
 
-</section>
+              <div class="insight-row">
+                <div class="insight-label">Latency</div>
+                <div class="insight-value" id="latency">--</div>
+              </div>
 
-<section class="sources">
+              <div class="insight-row">
+                <div class="insight-label">Searches Left</div>
+                <div class="insight-value" id="quota">--</div>
+              </div>
+            </div>
 
-<h3>Sources</h3>
-<div id="sources"></div>
+            <div class="tier-capabilities" id="capabilities"></div>
 
-</section>
+            <div class="meta-note" id="meta-note">
+              Awaiting first query.
+            </div>
+          </div>
+        </aside>
+      </section>
 
-<footer>
+      <div class="footer">
+        Nexus is part of the Chiron AI platform, built by Modman Technologies LLC.
+      </div>
+    </div>
+  </div>
 
-Nexus is part of the Chiron AI platform, built by Modman Technologies LLC.
+  <script>
+    let clerk = null;
 
-</footer>
+    const signinBtn = document.getElementById("signin");
+    const signoutBtn = document.getElementById("signout");
+    const searchBtn = document.getElementById("searchBtn");
+    const queryInput = document.getElementById("query");
 
-<script>
+    const accountBadge = document.getElementById("account-badge");
+    const accountEmail = document.getElementById("account-email");
 
-let clerk=null;
+    const answerEl = document.getElementById("answer");
+    const sourcesEl = document.getElementById("sources");
+    const statusEl = document.getElementById("status");
 
-async function init(){
+    const tierEl = document.getElementById("tier");
+    const providerEl = document.getElementById("provider");
+    const confidenceEl = document.getElementById("confidence");
+    const cacheEl = document.getElementById("cache");
+    const latencyEl = document.getElementById("latency");
+    const quotaEl = document.getElementById("quota");
+    const capabilitiesEl = document.getElementById("capabilities");
+    const metaNoteEl = document.getElementById("meta-note");
 
-if(!window.Clerk){
-console.error("Clerk failed to load");
-return;
-}
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
 
-clerk=window.Clerk;
-await clerk.load();
+    function setSignedOutState() {
+      accountBadge.textContent = "Signed out";
+      accountEmail.textContent = "--";
+    }
 
-document.getElementById("signin").onclick=()=>clerk.openSignIn();
+    function setSignedInState(email) {
+      accountBadge.textContent = "Signed in";
+      accountEmail.textContent = email || "--";
+    }
 
-document.getElementById("signout").onclick=()=>clerk.signOut();
+    function renderAnswer(text) {
+      if (!text) {
+        answerEl.innerHTML = "No answer returned.";
+        return;
+      }
 
-document.getElementById("searchBtn").onclick=runSearch;
+      const paragraphs = String(text)
+        .split(/\n{2,}/)
+        .map((p) => `<p>${escapeHtml(p)}</p>`)
+        .join("");
 
-}
+      answerEl.innerHTML = paragraphs || escapeHtml(text);
+    }
 
-async function runSearch(){
+    function renderSources(sourceLinks) {
+      if (!Array.isArray(sourceLinks) || sourceLinks.length === 0) {
+        sourcesEl.innerHTML = `<div class="empty">No sources yet.</div>`;
+        return;
+      }
 
-const q=document.getElementById("query").value.trim();
+      sourcesEl.innerHTML = sourceLinks.map((item) => {
+        const title = escapeHtml(item?.title || item?.url || "Source");
+        const url = escapeHtml(item?.url || "#");
+        const provider = escapeHtml(item?.provider || "");
+        return `
+          <a class="source-item" href="${url}" target="_blank" rel="noopener noreferrer">
+            <div class="source-title">${title}</div>
+            <div class="source-provider">${provider}</div>
+          </a>
+        `;
+      }).join("");
+    }
 
-if(!q)return;
+    function renderCapabilities(caps) {
+      capabilitiesEl.innerHTML = "";
 
-let token="";
+      if (!caps || typeof caps !== "object") {
+        return;
+      }
 
-if(clerk.session){
-token=await clerk.session.getToken({skipCache:true});
-}
+      const items = [
+        { label: caps.cache_access ? "Cache Access" : "No Cache" },
+        { label: caps.live_search ? "Live Search" : "No Live Search" },
+        { label: caps.upgrade_required ? "Upgrade Available" : "Current Tier Unlocked" }
+      ];
 
-const headers={"Content-Type":"application/json"};
+      items.forEach((item) => {
+        const div = document.createElement("div");
+        div.className = "cap-pill";
+        div.textContent = item.label;
+        capabilitiesEl.appendChild(div);
+      });
+    }
 
-if(token)headers.Authorization=`Bearer ${token}`;
+    function renderMeta(data) {
+      tierEl.textContent = data?.access_tier || "--";
+      providerEl.textContent = data?.provider || "--";
+      confidenceEl.textContent = data?.confidence || "--";
 
-const res=await fetch("/api/search",{
-method:"POST",
-headers,
-body:JSON.stringify({query:q})
-});
+      const cacheText = data?.cached
+        ? `${data?.cache_type || "cached"}`
+        : (data?.cache_type || "none");
 
-const data=await res.json();
+      cacheEl.textContent = cacheText;
+      latencyEl.textContent = typeof data?.response_time_ms === "number"
+        ? `${data.response_time_ms} ms`
+        : "--";
 
-document.getElementById("answer").innerText=data.answer||"No answer";
+      if (typeof data?.daily_search_remaining === "number") {
+        quotaEl.textContent = String(data.daily_search_remaining);
+      } else {
+        quotaEl.textContent = "—";
+      }
 
-document.getElementById("tier").innerText=data.access_tier||"--";
-document.getElementById("provider").innerText=data.provider||"--";
-document.getElementById("confidence").innerText=data.confidence||"--";
-document.getElementById("cache").innerText=data.cache_type||"--";
-document.getElementById("latency").innerText=data.response_time_ms+" ms";
+      const route = data?.route_mode || "--";
+      const queryType = data?.query_type || "--";
+      const liveUsed = data?.live_search_used === true ? "Live" : "Cached/Blocked";
 
-const src=document.getElementById("sources");
-src.innerHTML="";
+      metaNoteEl.textContent = `Mode: ${route} • Query: ${queryType} • Path: ${liveUsed}`;
+      renderCapabilities(data?.tier_capabilities);
+    }
 
-if(data.source_links){
-data.source_links.forEach(s=>{
-const div=document.createElement("div");
-div.className="source";
-div.innerHTML=`<a href="${s.url}" target="_blank">${s.title}</a>`;
-src.appendChild(div);
-});
-}
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
 
-}
+    async function initClerk() {
+      if (!window.Clerk) {
+        console.error("Clerk failed to load");
+        setSignedOutState();
+        return;
+      }
 
-document.addEventListener("DOMContentLoaded",init);
+      clerk = window.Clerk;
+      await clerk.load();
 
-</script>
+      updateAuthState();
 
+      clerk.addListener(() => {
+        updateAuthState();
+      });
+
+      signinBtn.onclick = () => {
+        clerk.openSignIn();
+      };
+
+      signoutBtn.onclick = async () => {
+        try {
+          await clerk.signOut();
+        } finally {
+          setSignedOutState();
+        }
+      };
+    }
+
+    function updateAuthState() {
+      if (!clerk || !clerk.user) {
+        setSignedOutState();
+        return;
+      }
+
+      const email = clerk.user.primaryEmailAddress?.emailAddress || "--";
+      setSignedInState(email);
+    }
+
+    async function runSearch() {
+      const q = queryInput.value.trim();
+      if (!q) return;
+
+      searchBtn.disabled = true;
+      setStatus("Searching");
+      renderAnswer("Searching…");
+
+      try {
+        let token = "";
+
+        if (clerk?.session) {
+          token = await clerk.session.getToken({ skipCache: true });
+        }
+
+        const headers = {
+          "Content-Type": "application/json"
+        };
+
+        if (token) {
+          headers.Authorization = `Bearer ${token}`;
+        }
+
+        const res = await fetch("/api/search", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ query: q })
+        });
+
+        const text = await res.text();
+        let data = null;
+
+        try {
+          data = JSON.parse(text);
+        } catch {
+          renderAnswer(text || "Non-JSON response returned.");
+          setStatus("Error");
+          return;
+        }
+
+        renderAnswer(data?.answer || "No answer returned.");
+        renderSources(data?.source_links || []);
+        renderMeta(data);
+
+        if (!res.ok) {
+          setStatus("Error");
+        } else if (data?.cached) {
+          setStatus("Cached");
+        } else if (data?.live_search_used) {
+          setStatus("Live");
+        } else {
+          setStatus("Done");
+        }
+      } catch (error) {
+        console.error(error);
+        renderAnswer(`Search failed: ${error?.message || error}`);
+        setStatus("Error");
+      } finally {
+        searchBtn.disabled = false;
+      }
+    }
+
+    searchBtn.addEventListener("click", runSearch);
+
+    queryInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        runSearch();
+      }
+    });
+
+    const clerkScript = document.getElementById("clerk-script");
+
+    if (window.Clerk) {
+      initClerk();
+    } else if (clerkScript) {
+      clerkScript.addEventListener("load", () => {
+        initClerk();
+      });
+
+      clerkScript.addEventListener("error", () => {
+        console.error("Clerk script failed to load");
+      });
+    }
+  </script>
 </body>
 </html>
