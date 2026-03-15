@@ -4,19 +4,8 @@ import { verifyToken } from "@clerk/backend";
 
 const SEARCH_ENABLED = process.env.SEARCH_ENABLED !== "false";
 const DEBUG_LOGS = process.env.DEBUG_LOGS === "true";
-
-/*
-  TEMPORARY FOR AUTH TESTING:
-  - false = bypass fingerprint/IP repeat protection
-  - true  = enable those protections again
-*/
-const ENABLE_RATE_LIMIT = false;
-
-/*
-  TEMPORARY FOR AUTH TESTING:
-  - true = prints backend auth resolution details
-*/
-const AUTH_DEBUG_LOGS = true;
+const ENABLE_RATE_LIMIT = process.env.ENABLE_RATE_LIMIT === "true";
+const AUTH_DEBUG_LOGS = process.env.AUTH_DEBUG_LOGS === "true";
 
 /*
   Product-level daily search quotas.
@@ -901,6 +890,7 @@ function buildQuotaExceededResponse({
     query_type: "unknown",
     query_difficulty: "unknown",
     route_mode: "quota-blocked",
+    resolution_mode: "quota-blocked",
     panel_size_initial: 0,
     panel_size_final: 0,
     consensus_level: null,
@@ -929,7 +919,8 @@ function buildCacheMissAccessResponse({
   queryDifficulty,
   requestStart,
   accessTier,
-  quota
+  quota,
+  resolutionMode
 }) {
   const isFree = accessTier === ACCESS_TIERS.FREE;
 
@@ -946,6 +937,7 @@ function buildCacheMissAccessResponse({
     query_type: queryType,
     query_difficulty: queryDifficulty,
     route_mode: "cache-only",
+    resolution_mode: resolutionMode,
     panel_size_initial: 0,
     panel_size_final: 0,
     consensus_level: null,
@@ -1034,12 +1026,14 @@ async function recordProviderSuccess(providerName, latencyMs) {
     getProviderStats(providerName)
   ]);
 
+  const now = Date.now();
+
   const nextState = {
     failures: 0,
     cooldown_until: 0,
     last_error: "",
     last_error_at: Number(state.last_error_at || 0),
-    last_success_at: Date.now()
+    last_success_at: now
   };
 
   const previousAvg =
@@ -1061,7 +1055,7 @@ async function recordProviderSuccess(providerName, latencyMs) {
       stats.slowest_ms == null
         ? latencyMs
         : Math.max(Number(stats.slowest_ms), latencyMs),
-    last_success_at: Date.now(),
+    last_success_at: now,
     last_failure_at: Number(stats.last_failure_at || 0)
   };
 
@@ -1083,17 +1077,18 @@ async function recordProviderFailure(providerName, latencyMs, errorMessage = "")
     getProviderStats(providerName)
   ]);
 
+  const now = Date.now();
   const nextFailures = Number(state.failures || 0) + 1;
   const cooldownUntil =
     nextFailures >= PROVIDER_FAILURE_THRESHOLD
-      ? Date.now() + PROVIDER_COOLDOWN_MS
+      ? now + PROVIDER_COOLDOWN_MS
       : 0;
 
   const nextState = {
     failures: nextFailures,
     cooldown_until: cooldownUntil,
     last_error: String(errorMessage || "Unknown provider failure").slice(0, 500),
-    last_error_at: Date.now(),
+    last_error_at: now,
     last_success_at: Number(state.last_success_at || 0)
   };
 
@@ -1112,7 +1107,7 @@ async function recordProviderFailure(providerName, latencyMs, errorMessage = "")
         ? latencyMs
         : Math.max(Number(stats.slowest_ms), latencyMs),
     last_success_at: Number(stats.last_success_at || 0),
-    last_failure_at: Date.now()
+    last_failure_at: now
   };
 
   await Promise.all([
@@ -1229,6 +1224,17 @@ function extractOutputTextParts(data) {
   }
 
   return parts;
+}
+
+function extractResponseOutputText(data) {
+  const messageItem = (data?.output || []).find((item) => item.type === "message");
+
+  return (
+    data?.output_text ||
+    messageItem?.content?.find((part) => part.type === "output_text")?.text ||
+    messageItem?.content?.[0]?.text ||
+    null
+  );
 }
 
 function extractOpenAISourceLinks(data) {
@@ -1613,6 +1619,102 @@ function estimateQueryDifficulty(query = "", queryType = "general") {
   if (score <= 0) return "easy";
   if (score <= 2) return "medium";
   return "hard";
+}
+
+function classifyFreshnessSensitivity(queryType, normalizedQuery) {
+  if (queryType === "fresh") {
+    return "high";
+  }
+
+  const q = normalizedQuery.toLowerCase();
+
+  if (
+    q.includes("latest") ||
+    q.includes("current") ||
+    q.includes("today") ||
+    q.includes("this week") ||
+    q.includes("this month") ||
+    q.includes("this year")
+  ) {
+    return "high";
+  }
+
+  if (/\b(20\d{2}|19\d{2})\b/.test(q)) {
+    return "medium";
+  }
+
+  if (queryType === "historical" || queryType === "factual") {
+    return "low";
+  }
+
+  return "medium";
+}
+
+function buildQueryResolutionPlan({
+  normalizedQuery,
+  queryType,
+  queryDifficulty,
+  semanticEnabled,
+  accessTier,
+  forceLive
+}) {
+  const freshnessSensitivity = classifyFreshnessSensitivity(queryType, normalizedQuery);
+  const tokenCount = tokenize(normalizedQuery).length;
+
+  let semanticPreferred = semanticEnabled;
+  let livePreferred = false;
+  let resolutionMode = "cache-first";
+
+  if (forceLive) {
+    return {
+      resolution_mode: "force-live",
+      freshness_sensitivity: freshnessSensitivity,
+      semantic_preferred: false,
+      live_preferred: true,
+      cache_reuse_score: 0
+    };
+  }
+
+  let cacheReuseScore = 0;
+
+  if (semanticEnabled) cacheReuseScore += 35;
+  if (freshnessSensitivity === "low") cacheReuseScore += 25;
+  if (freshnessSensitivity === "medium") cacheReuseScore += 10;
+  if (freshnessSensitivity === "high") cacheReuseScore -= 30;
+
+  if (queryDifficulty === "easy") cacheReuseScore += 15;
+  if (queryDifficulty === "hard") cacheReuseScore -= 10;
+
+  if (queryType === "historical") cacheReuseScore += 15;
+  if (queryType === "comparison") cacheReuseScore -= 10;
+  if (queryType === "visual") cacheReuseScore -= 5;
+
+  if (tokenCount <= 5) cacheReuseScore += 8;
+  if (tokenCount >= 14) cacheReuseScore -= 8;
+
+  if (accessTier === ACCESS_TIERS.ADMIN) cacheReuseScore -= 2;
+  if (accessTier === ACCESS_TIERS.PAID) cacheReuseScore -= 5;
+
+  if (freshnessSensitivity === "high") {
+    semanticPreferred = false;
+    livePreferred = true;
+    resolutionMode = "freshness-sensitive";
+  } else if (cacheReuseScore >= 45) {
+    resolutionMode = "cache-heavy";
+  } else if (cacheReuseScore >= 20) {
+    resolutionMode = "cache-first";
+  } else {
+    resolutionMode = "live-leaning";
+    livePreferred = true;
+  }
+
+  return {
+    resolution_mode: resolutionMode,
+    freshness_sensitivity: freshnessSensitivity,
+    semantic_preferred: semanticPreferred,
+    live_preferred: livePreferred,
+    cache_reuse_score: cacheReuseScore
+  };
 }
 
 function buildRoutePlan({ queryType, difficulty, providers }) {
@@ -2137,16 +2239,8 @@ async function callOpenAI(query) {
       return null;
     }
 
-    const messageItem = (data.output || []).find((item) => item.type === "message");
-
-    const answer =
-      data.output_text ||
-      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
-      messageItem?.content?.[0]?.text ||
-      null;
-
     return {
-      answer,
+      answer: extractResponseOutputText(data),
       source_links: extractOpenAISourceLinks(data),
       reference_image: null
     };
@@ -2515,14 +2609,7 @@ Your task:
       return null;
     }
 
-    const messageItem = (data.output || []).find((item) => item.type === "message");
-
-    return (
-      data.output_text ||
-      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
-      messageItem?.content?.[0]?.text ||
-      null
-    );
+    return extractResponseOutputText(data);
   } catch (error) {
     console.error("Cleanup request error:", error);
     return null;
@@ -2619,13 +2706,7 @@ ${JSON.stringify(packet)}
       return null;
     }
 
-    const messageItem = (data.output || []).find((item) => item.type === "message");
-    const text =
-      data.output_text ||
-      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
-      messageItem?.content?.[0]?.text ||
-      "";
-
+    const text = extractResponseOutputText(data) || "";
     const parsed = tryParseJson(text);
 
     if (!parsed || typeof parsed !== "object") {
@@ -2739,14 +2820,7 @@ Your task:
       return null;
     }
 
-    const messageItem = (data.output || []).find((item) => item.type === "message");
-
-    return (
-      data.output_text ||
-      messageItem?.content?.find((part) => part.type === "output_text")?.text ||
-      messageItem?.content?.[0]?.text ||
-      null
-    );
+    return extractResponseOutputText(data);
   } catch (error) {
     console.error("Synthesis request error:", error);
     return null;
@@ -2954,8 +3028,68 @@ function buildProviderResultsList(providersUsed, providerResults, normalizedQuer
   });
 }
 
+function buildCorsHeaders(origin) {
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Chiron-Admin-Key, X-Chiron-Force-Live",
+    Vary: "Origin"
+  };
+}
+
+function applyCors(res, origin) {
+  const headers = buildCorsHeaders(origin);
+  Object.entries(headers).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
+}
+
+function buildCacheHitResponse({
+  cachedPayload,
+  cacheType,
+  requestStart,
+  accessTier,
+  liveSearchAllowed,
+  cacheOnlyMode,
+  quota,
+  tierCapabilities,
+  resolutionPlan
+}) {
+  return {
+    ...cachedPayload,
+    cached: true,
+    cache_type: cacheType,
+    response_time_ms: Date.now() - requestStart,
+    access_tier: accessTier,
+    live_search_used: false,
+    live_search_available: liveSearchAllowed,
+    cache_only_mode: cacheOnlyMode,
+    daily_search_limit: quota.limit,
+    daily_search_used: quota.used,
+    daily_search_remaining: quota.remaining,
+    tier_capabilities: tierCapabilities,
+    resolution_mode: resolutionPlan.resolution_mode,
+    freshness_sensitivity: resolutionPlan.freshness_sensitivity,
+    cache_reuse_score: resolutionPlan.cache_reuse_score
+  };
+}
+
 export default async function handler(req, res) {
   const requestStart = Date.now();
+  const origin = getHeader(req, "origin");
+  const hasAllowedOrigin = isAllowedOrigin(origin);
+
+  if (hasAllowedOrigin) {
+    applyCors(res, origin);
+  }
+
+  if (req.method === "OPTIONS") {
+    if (!hasAllowedOrigin) {
+      return res.status(403).end("Forbidden");
+    }
+    return res.status(204).end();
+  }
 
   if (!SEARCH_ENABLED) {
     return res.status(503).json({
@@ -2965,12 +3099,11 @@ export default async function handler(req, res) {
     });
   }
 
-  const origin = getHeader(req, "origin");
   const contentType = getHeader(req, "content-type");
   const userAgent = getHeader(req, "user-agent");
   const fingerprint = buildRequestFingerprint(req);
 
-  if (!isAllowedOrigin(origin)) {
+  if (!hasAllowedOrigin) {
     await incrementMetricDual("forbidden_origin");
     return res.status(403).json({
       answer: "Forbidden.",
@@ -3055,9 +3188,32 @@ export default async function handler(req, res) {
 
   const queryType = classifyQuery(normalizedQuery);
   const queryDifficulty = estimateQueryDifficulty(normalizedQuery, queryType);
+  const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
+  const semanticFingerprint = semanticEnabled
+    ? fingerprintQuery(normalizedQuery)
+    : "";
+  const semanticKey = semanticFingerprint
+    ? `semantic:v18:${semanticFingerprint}`
+    : "";
+  const cacheKey = `search:v32:${normalizedQuery}`;
+
+  const resolutionPlan = buildQueryResolutionPlan({
+    normalizedQuery,
+    queryType,
+    queryDifficulty,
+    semanticEnabled,
+    accessTier,
+    forceLive
+  });
 
   await incrementMetric("request_by_query_type", queryType, 1);
   await incrementMetric("request_by_difficulty", queryDifficulty, 1);
+  await incrementMetric("resolution_mode_used", resolutionPlan.resolution_mode, 1);
+  await incrementMetric(
+    "freshness_sensitivity_used",
+    resolutionPlan.freshness_sensitivity,
+    1
+  );
 
   if (ENABLE_RATE_LIMIT) {
     const queryBurstFingerprint = crypto
@@ -3128,58 +3284,47 @@ export default async function handler(req, res) {
     );
   }
 
-  const cacheKey = `search:v31:${normalizedQuery}`;
-  const semanticEnabled = isSemanticCacheSafe(normalizedQuery);
-  const semanticFingerprint = semanticEnabled
-    ? fingerprintQuery(normalizedQuery)
-    : "";
-  const semanticKey = semanticFingerprint
-    ? `semantic:v17:${semanticFingerprint}`
-    : "";
-
   try {
     if (!forceLive) {
       const cached = await kv.get(cacheKey);
 
       if (cached) {
         await incrementMetricDual("cache_hit_exact");
-        return res.status(200).json({
-          ...cached,
-          cached: true,
-          cache_type: "exact",
-          response_time_ms: Date.now() - requestStart,
-          access_tier: accessTier,
-          live_search_used: false,
-          live_search_available: liveSearchAllowed,
-          cache_only_mode: cacheOnlyMode,
-          daily_search_limit: quota.limit,
-          daily_search_used: quota.used,
-          daily_search_remaining: quota.remaining,
-          tier_capabilities: tierCapabilities
-        });
+        return res.status(200).json(
+          buildCacheHitResponse({
+            cachedPayload: cached,
+            cacheType: "exact",
+            requestStart,
+            accessTier,
+            liveSearchAllowed,
+            cacheOnlyMode,
+            quota,
+            tierCapabilities,
+            resolutionPlan
+          })
+        );
       }
 
-      if (semanticKey) {
+      if (semanticKey && resolutionPlan.semantic_preferred) {
         const semanticCached = await kv.get(semanticKey);
 
         if (semanticCached) {
           await kv.set(cacheKey, semanticCached, { ex: EXACT_CACHE_TTL_SECONDS });
           await incrementMetricDual("cache_hit_semantic");
 
-          return res.status(200).json({
-            ...semanticCached,
-            cached: true,
-            cache_type: "semantic",
-            response_time_ms: Date.now() - requestStart,
-            access_tier: accessTier,
-            live_search_used: false,
-            live_search_available: liveSearchAllowed,
-            cache_only_mode: cacheOnlyMode,
-            daily_search_limit: quota.limit,
-            daily_search_used: quota.used,
-            daily_search_remaining: quota.remaining,
-            tier_capabilities: tierCapabilities
-          });
+          return res.status(200).json(
+            buildCacheHitResponse({
+              cachedPayload: semanticCached,
+              cacheType: "semantic",
+              requestStart,
+              accessTier,
+              liveSearchAllowed,
+              cacheOnlyMode,
+              quota,
+              tierCapabilities,
+              resolutionPlan
+            })
+          );
         }
       }
     }
@@ -3194,11 +3339,14 @@ export default async function handler(req, res) {
         queryDifficulty,
         requestStart,
         accessTier,
-        quota
+        quota,
+        resolutionMode: resolutionPlan.resolution_mode
       });
 
       return res.status(200).json({
         ...missResponse,
+        freshness_sensitivity: resolutionPlan.freshness_sensitivity,
+        cache_reuse_score: resolutionPlan.cache_reuse_score,
         request_queued: Boolean(queueMeta),
         request_queue_count: queueMeta?.count || 0,
         first_requested_at: queueMeta?.first_requested_at || null,
@@ -3266,6 +3414,7 @@ export default async function handler(req, res) {
       normalizedQuery,
       queryType
     );
+
     let validProviderAnswers = providerResultsList.filter((item) => item.answer);
     let sourceLinks = dedupeSourceLinks(
       validProviderAnswers.flatMap((item) => item.source_links || [])
@@ -3439,6 +3588,9 @@ export default async function handler(req, res) {
       query_type: queryType,
       query_difficulty: queryDifficulty,
       route_mode: routePlan.route_mode,
+      resolution_mode: resolutionPlan.resolution_mode,
+      freshness_sensitivity: resolutionPlan.freshness_sensitivity,
+      cache_reuse_score: resolutionPlan.cache_reuse_score,
       panel_size_initial: initialProviders.length,
       panel_size_final: providersUsed.length,
       panel_expanded: expansionUsed,
@@ -3461,7 +3613,7 @@ export default async function handler(req, res) {
     if (finalAnswer) {
       await kv.set(cacheKey, result, { ex: EXACT_CACHE_TTL_SECONDS });
 
-      if (semanticKey) {
+      if (semanticKey && semanticEnabled) {
         await kv.set(semanticKey, result, { ex: SEMANTIC_CACHE_TTL_SECONDS });
       }
     }
